@@ -74,6 +74,7 @@ IDLE_LOOK_AROUND_YAW_RANGE = 15.0  # Maximum yaw angle in degrees
 IDLE_LOOK_AROUND_PITCH_RANGE = 6.0  # Maximum pitch angle in degrees
 IDLE_LOOK_AROUND_DURATION = 2.0  # Duration of look-around action in seconds
 IDLE_INACTIVITY_THRESHOLD = 8.0  # Seconds of inactivity before look-around starts
+IDLE_LOOK_AROUND_PROBABILITY = 0.5  # Otherwise keep breathing-only cycle
 
 
 class MovementManager:
@@ -895,6 +896,15 @@ class MovementManager:
 
         # Check if it's time for look-around
         if now >= self.state.next_look_around_time and not self.state.look_around_in_progress:
+            # Random alternation between breathing-only and look-around.
+            # Breathing animation is always active in idle; skipping look-around
+            # for this cycle shows breathing-only behavior.
+            if random.random() > IDLE_LOOK_AROUND_PROBABILITY:
+                interval = random.uniform(IDLE_LOOK_AROUND_MIN_INTERVAL, IDLE_LOOK_AROUND_MAX_INTERVAL)
+                self.state.next_look_around_time = now + interval
+                logger.debug("Idle cycle: breathing-only for %.1fs", interval)
+                return
+
             # Generate random look direction
             target_yaw = random.uniform(-IDLE_LOOK_AROUND_YAW_RANGE, IDLE_LOOK_AROUND_YAW_RANGE)
             target_pitch = random.uniform(-IDLE_LOOK_AROUND_PITCH_RANGE, IDLE_LOOK_AROUND_PITCH_RANGE)
