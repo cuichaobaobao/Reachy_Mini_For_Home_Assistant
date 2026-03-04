@@ -654,7 +654,7 @@ class VoiceAssistantService:
                     reachy_mini=self.reachy_mini,
                     host=self.host,
                     port=self.camera_port,
-                    fps=15,
+                    fps=None,
                     quality=80,
                     enable_face_tracking=True,
                     gstreamer_lock=self._gstreamer_lock,

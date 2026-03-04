@@ -57,7 +57,7 @@ class MJPEGCameraServer:
         reachy_mini: ReachyMini,
         host: str = "0.0.0.0",
         port: int = 8081,
-        fps: int = 15,  # 15fps for smooth face tracking
+        fps: int | None = None,
         quality: int = 80,
         enable_face_tracking: bool = True,
         enable_gesture_detection: bool = True,
@@ -71,7 +71,7 @@ class MJPEGCameraServer:
             reachy_mini: Reachy Mini robot instance (can be None for testing)
             host: Host address to bind to
             port: Port number for the HTTP server
-            fps: Target frames per second for the stream
+            fps: Target capture FPS. If None, try camera backend default FPS.
             quality: JPEG quality (1-100)
             enable_face_tracking: Enable face tracking for head movement
             face_confidence_threshold: Minimum confidence for face detection (0-1)
@@ -81,6 +81,15 @@ class MJPEGCameraServer:
         self._gstreamer_lock = gstreamer_lock if gstreamer_lock is not None else threading.Lock()
         self.host = host
         self.port = port
+        if fps is None:
+            detected_fps = None
+            try:
+                camera = getattr(getattr(reachy_mini, "media", None), "camera", None)
+                detected_fps = float(getattr(camera, "framerate", 0) or 0)
+            except Exception:
+                detected_fps = None
+            fps = int(detected_fps) if detected_fps and detected_fps > 0 else 15
+
         self.fps = fps
         self.quality = quality
         self.enable_face_tracking = enable_face_tracking
@@ -447,6 +456,7 @@ class MJPEGCameraServer:
         while self._running:
             try:
                 current_time = time.time()
+                has_stream_clients = self._has_stream_clients()
 
                 # Determine if we should run AI inference this frame
                 should_run_ai = self._should_run_ai_inference(current_time)
@@ -457,23 +467,22 @@ class MJPEGCameraServer:
                 )
 
                 # Only get frame if needed (AI inference, gesture detection, or MJPEG streaming)
-                frame = (
-                    self._get_camera_frame()
-                    if should_run_ai or should_run_gesture or self._has_stream_clients()
-                    else None
-                )
+                frame = self._get_camera_frame() if should_run_ai or should_run_gesture or has_stream_clients else None
 
                 if frame is not None:
                     frame_count += 1
 
-                    # Encode frame as JPEG for streaming
-                    encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.quality]
-                    success, jpeg_data = cv2.imencode(".jpg", frame, encode_params)
+                    # Encode frame only when stream viewers are connected.
+                    # This keeps face/gesture inference active while avoiding MJPEG overhead
+                    # when nobody is watching the stream.
+                    if has_stream_clients:
+                        encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.quality]
+                        success, jpeg_data = cv2.imencode(".jpg", frame, encode_params)
 
-                    if success:
-                        with self._frame_lock:
-                            self._last_frame = jpeg_data.tobytes()
-                            self._last_frame_time = time.time()
+                        if success:
+                            with self._frame_lock:
+                                self._last_frame = jpeg_data.tobytes()
+                                self._last_frame_time = time.time()
 
                     # Only run AI inference when enabled
                     if should_run_ai:
@@ -524,7 +533,7 @@ class MJPEGCameraServer:
                 # Sleep to maintain target FPS (use adaptive rate)
                 # Keep a minimum processing cadence for gesture responsiveness.
                 sleep_time = self._frame_rate_manager.get_sleep_interval()
-                if self._gesture_detection_enabled and self._gesture_detector is not None:
+                if has_stream_clients and self._gesture_detection_enabled and self._gesture_detector is not None:
                     sleep_time = min(sleep_time, 1.0 / GESTURE_MIN_FPS)
                 time.sleep(sleep_time)
 
@@ -951,6 +960,18 @@ class MJPEGCameraServer:
     async def _handle_snapshot(self, writer: asyncio.StreamWriter) -> None:
         """Handle snapshot request - return single JPEG image."""
         jpeg_data = self.get_snapshot()
+
+        # If there is no cached JPEG (e.g. no stream viewers), try one on-demand frame.
+        if jpeg_data is None:
+            frame = self._get_camera_frame()
+            if frame is not None:
+                encode_params = [cv2.IMWRITE_JPEG_QUALITY, self.quality]
+                success, jpeg_buf = cv2.imencode(".jpg", frame, encode_params)
+                if success:
+                    jpeg_data = jpeg_buf.tobytes()
+                    with self._frame_lock:
+                        self._last_frame = jpeg_data
+                        self._last_frame_time = time.time()
 
         if jpeg_data is None:
             response = (

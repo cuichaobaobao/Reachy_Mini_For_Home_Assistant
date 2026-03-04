@@ -1,4 +1,4 @@
-# Reachy Mini for Home Assistant - Project Plan
+# Reachy Mini for Home Assistant - Project Plan (Current snapshot: v1.0.0)
 
 ## Project Overview
 
@@ -101,13 +101,13 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                             │
 │  ┌─────────────────────────── GESTURE DETECTION ────────────────────────┐  │
-│  │  HaGRID ONNX Models + GestureSmoother (v0.9.9 optimized)           │  │
+│  │  HaGRID ONNX Models + GestureSmoother (v1.0.0)                     │  │
 │  │  • 18 gesture classes (call, like, dislike, fist, ok, palm, etc.)    │  │
-│  │  • GestureSmoother with frequency-based confirmation (1 frame)      │  │
+│  │  • GestureSmoother fast-confirm + grace clear                        │  │
 │  │  • Batch detection: all hands (not just highest confidence)         │  │
-│  │  • Detection frequency: 1 frame interval (high sensitivity)         │  │
+│  │  • Detection cadence: adaptive scheduler + minimum processing FPS    │  │
 │  │  • No confidence filtering - all detections passed to Home Assistant│  │
-│  │  • Only runs when face detected (power saving)                       │  │
+│  │  • Runtime switchable (default OFF, model unloaded when disabled)    │  │
 │  │  • Real-time state push to Home Assistant                            │  │
 │  │  • No conflicts with face tracking (shared frame, independent)       │  │
 │  │  • SDK integration: MediaBackend detection, proper resource cleanup │  │
@@ -115,7 +115,7 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 │                                                                             │
 │  ┌─────────────────────────── ESPHOME SERVER ────────────────────────────┐  │
 │  │  Port 6053 (mDNS auto-discovery)                                      │  │
-│  │  • 54 entities (sensors, controls, media player, camera)              │  │
+│  │  • Entity count evolves by release (sensors, controls, media, camera) │  │
 │  │  • Voice Assistant pipeline integration                               │  │
 │  │  • Real-time state synchronization                                    │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
@@ -132,10 +132,10 @@ Integrate Home Assistant voice assistant functionality into Reachy Mini Wi-Fi ro
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### Software Module Architecture (v0.9.9)
+### Software Module Architecture (v1.0.0)
 
 ```
-reachy_mini_ha_voice/
+reachy_mini_home_assistant/
 │
 ├── main.py                    # Application entry point
 ├── voice_assistant.py         # Voice assistant service orchestrator
@@ -170,7 +170,7 @@ reachy_mini_ha_voice/
 │   ├── camera_server.py       # MJPEG camera stream server
 │   ├── head_tracker.py        # YOLO face detector
 │   ├── gesture_detector.py    # HaGRID gesture detection
-│   ├── gesture_smoother.py    # Gesture history tracking and confirmation (v0.9.9)
+│   ├── gesture_smoother.py    # Gesture history tracking and confirmation (v1.0.0)
 │   ├── face_tracking_interpolator.py  # Smooth face tracking
 │   └── frame_processor.py     # Adaptive frame rate management
 │
@@ -204,6 +204,32 @@ reachy_mini_ha_voice/
     ├── hey_luna.json/.tflite
     └── stop.json/.tflite
 ```
+
+
+### Current Runtime Defaults (v1.0.0)
+
+- `idle_motion_enabled`: OFF
+- `sendspin_enabled`: OFF
+- `face_tracking_enabled`: OFF
+- `gesture_detection_enabled`: OFF
+- `face_confidence_threshold`: 0.5 (persistent)
+- Idle antenna behavior: torque disabled in `IDLE`, re-enabled when leaving `IDLE`
+
+When face/gesture switches are OFF, their models are unloaded to save resources.
+
+### Current Audio Startup Note (SDK 1.4.1)
+
+- On some boots, SDK media init may fall back to OpenAL (`gstopenalsrc`) and fail microphone capture if source card probing is not ready.
+- App behavior in v1.0.0 is fail-fast for missing microphone capture to avoid silent degraded startup.
+- This is tracked as an SDK/media backend startup readiness issue rather than an OpenAI pipeline issue.
+
+### Latest Incremental Update (2026-03-04) - Viewer-Aware Camera Streaming
+
+- MJPEG encoding/push is now viewer-aware: when no `/stream` client is connected, continuous MJPEG encoding is skipped to reduce CPU usage.
+- Face tracking and gesture detection still run without active stream viewers, so AI behavior remains available.
+- `/snapshot` now supports on-demand frame encode when no cached stream frame exists.
+- Stream output no longer forces fixed 1080p/25fps; it follows camera backend defaults (resolution/FPS) and only falls back when backend FPS is unavailable.
+- Transition from "watching" to "not watching" returns to adaptive idle pacing for resource saving.
 
 ## Completed Features
 
@@ -321,38 +347,24 @@ reachy_mini_ha_voice/
 
 ```toml
 dependencies = [
-    # Reachy Mini SDK (provides audio via media system)
-    "reachy-mini",
-
-    # Audio processing (fallback when not on Reachy Mini)
-    "sounddevice>=0.5.0",
+    "reachy-mini[gstreamer]>=1.4.1",
+    "reachy-mini-motor-controller>=1.5.5",
     "soundfile>=0.13.0",
-    "numpy>=2.0.0",
-
-    # Camera streaming
-    "opencv-python>=4.10.0",
-
-    # Wake word detection (local)
+    "numpy>=2.0.0,<=2.2.5",
+    "opencv-python>=4.12.0.88",
     "pymicro-wakeword>=2.0.0,<3.0.0",
     "pyopen-wakeword>=1.0.0,<2.0.0",
-
-    # ESPHome protocol (communication with Home Assistant)
     "aioesphomeapi>=43.10.1",
-    "zeroconf>=0.140.0",
-
-    # Motion control (head movements)
+    "zeroconf<1",
     "scipy>=1.14.0",
-
-    # Face tracking (YOLO-based head detection)
-    "ultralytics>=8.3.0",
-    "supervision>=0.25.0",
-    "huggingface_hub>=0.27.0",
-
-    # Sendspin synchronized audio (optional, for multi-room playback)
+    "ultralytics",
+    "supervision",
     "aiosendspin>=2.0.1",
-
-    # Gesture detection (ONNX runtime for HaGRID models)
     "onnxruntime>=1.18.0",
+    "torch==2.5.1",
+    "torchvision==0.20.1",
+    "pillow<12.0",
+    "pydantic<=2.12.5",
 ]
 ```
 
@@ -539,15 +551,15 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
     - [x] AudioPlayer integrates aiosendspin library
     - [x] TTS audio sent to both local speaker and Sendspin server
 
-14. **Phase 22 - Gesture Detection** ✅ **Completed (v0.9.9: Optimized with GestureSmoother)**
+14. **Phase 22 - Gesture Detection** ✅ **Completed (v1.0.0 behavior)**
     - [x] `gesture_detected` - Detected gesture name (Text Sensor)
     - [x] `gesture_confidence` - Gesture detection confidence % (Sensor)
     - [x] HaGRID ONNX models: hand_detector.onnx + crops_classifier.onnx
     - [x] Real-time state push to Home Assistant
-    - [x] GestureSmoother with frequency-based confirmation (1 frame, v0.9.9 simplified)
-    - [x] No confidence filtering - all detections passed to Home Assistant
+    - [x] GestureSmoother fast confirm + grace clear behavior
+    - [x] Runtime toggle supported (default OFF, model unload on disable)
     - [x] Batch detection: returns all detected hands (not just highest confidence)
-    - [x] Detection frequency: 1 frame interval (high sensitivity)
+    - [x] Minimum processing cadence preserved for responsiveness
     - [x] No conflicts with face tracking (shared frame, independent processing)
     - [x] SDK integration: MediaBackend detection, proper resource cleanup on shutdown
     - [x] 18 supported gestures:
@@ -578,7 +590,7 @@ Based on deep analysis of Reachy Mini SDK, the following entities are exposed to
 
 ## 🎉 Phase 1-13 + Phase 22 + Phase 24 Entities Completed!
 
-**Total Completed: 54 entities**
+**Total Completed: See runtime registry (count evolves with releases)**
 - Phase 1: 4 entities (Basic status and volume)
 - Phase 2: 4 entities (Motor control)
 - Phase 3: 9 entities (Pose control)
@@ -742,7 +754,7 @@ automation:
 - Idle with face detected: High-frequency tracking 15fps
 - Idle without face for 5s: Low-power mode 2fps
 - Idle without face for 30s: Ultra-low power mode 0.5fps (every 2 seconds)
-- Gesture detection only runs when face detected recently (within 5s)
+- Gesture detection is switch-controlled and can run independently of face tracking
 - Immediately restore high-frequency tracking when face detected
 
 **Code Locations**:
@@ -865,13 +877,15 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 - ✅ Different antenna patterns: "both" (sync), "wiggle" (opposite phase)
 - ✅ State-specific antenna animations (listening/thinking/speaking)
 - ✅ Smooth transitions between animation states
+- ✅ v1.0.0 idle refinement: idle antenna sway disabled while conversation-state antenna behaviors are retained
+- ✅ v1.0.0 hardware refinement: antenna torque disabled in `IDLE` to reduce idle chatter/noise
 
 **Code Locations**:
 - `motion/animation_player.py` - AnimationPlayer with antenna offset calculation
 - `animations/conversation_animations.json` - Antenna amplitude and pattern definitions
 - `motion/movement_manager.py` - Antenna offset composition in final pose
 
-### Phase 18 - Visual Gaze Interaction (Not Implemented) ❌
+### Phase 18 - Visual Gaze Interaction (Single-face only) ✅
 
 **Goal**: Use camera to detect faces for eye contact.
 
@@ -880,14 +894,15 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 - `look_at_world(x, y, z)` - Look at world coordinate point
 - `media.get_frame()` - Get camera frame (✅ Already implemented in `vision/camera_server.py:146`)
 
-**Not Implemented Features**:
+**Current Status**:
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| Face detection | Use OpenCV/MediaPipe to detect faces | ❌ Not implemented |
-| Eye tracking | Look at speaker's face during conversation | ❌ Not implemented |
-| Multi-person switching | When multiple people detected, look at current speaker | ❌ Not implemented |
-| Idle scanning | Randomly look around when idle | ❌ Not implemented |
+| Face detection | YOLO-based face detection (`AdamCodd/YOLOv11n-face-detection`) | ✅ Implemented |
+| Eye tracking | Robot tracks detected face during conversation/active mode | ✅ Implemented |
+| Idle scanning | Random look-around in idle cycles (switch-controlled) | ✅ Implemented |
+
+> Scope note: Current implementation is intentionally single-face tracking for stability and device performance.
 
 ### Phase 19 - Gravity Compensation Interactive Mode (Partial) 🟡
 
@@ -959,7 +974,7 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 ### ✅ Completed Features
 
 #### Core Voice Assistant (Phase 1-12)
-- **54 ESPHome entities** - All implemented (Phase 11 LED disabled)
+- **ESPHome entities** - Core phases implemented (Phase 11 LED intentionally disabled); exact count evolves by release
 - **Basic voice interaction** - Wake word detection (microWakeWord/openWakeWord), STT/TTS integration
 - **Motion feedback** - Nod, shake, gaze and other basic actions
 - **Audio processing** - AGC, noise suppression, echo cancellation
@@ -980,12 +995,11 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 
 ### ❌ Not Implemented Features
 
-- **Phase 18** - Visual gaze interaction (eye contact with multiple people)
 - **Phase 21** - Home Assistant scene integration (morning/night routines)
 
 ---
 
-## Feature Priority Summary (Updated v0.9.5)
+## Feature Priority Summary (Updated v1.0.0)
 
 ### Completed ✅
 - ✅ **Phase 1-12**: Core ESPHome entities and voice assistant
@@ -993,7 +1007,7 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 - ✅ **Phase 14**: Emotion keyword detection and auto-trigger
 - ✅ **Phase 15**: Face tracking with body following
 - ✅ **Phase 16**: JSON-driven animation system
-- ✅ **Phase 17**: Antenna sync animation
+- ✅ **Phase 17**: Antenna sync animation + v1.0.0 idle antenna behavior refinements
 - ✅ **Phase 22**: Gesture detection
 - ✅ **Phase 24**: System diagnostics (psutil-based)
 
@@ -1002,7 +1016,6 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 - 🟡 **Phase 20**: Environment awareness (IMU entities done, triggers pending)
 
 ### Not Implemented ❌
-- ❌ **Phase 18**: Visual gaze interaction
 - ❌ **Phase 21**: Home Assistant scene integration
 
 ---
@@ -1011,21 +1024,22 @@ def _compose_final_pose(self) -> Tuple[np.ndarray, Tuple[float, float], float]:
 
 | Phase | Status | Completion | Notes |
 |-------|--------|------------|-------|
-| Phase 1-12 | ✅ Complete | 100% | 40 ESPHome entities implemented (Phase 11 LED disabled) |
+| Phase 1-12 | ✅ Complete | 100% | Core ESPHome entities implemented (Phase 11 LED intentionally disabled) |
 | Phase 13 | ✅ Complete | 100% | Sendspin audio playback support |
 | Phase 14 | ✅ Complete | 95% | Emotion keyword detection with 280+ keywords, 35 categories |
 | Phase 15 | ✅ Complete | 100% | Face tracking with DOA, YOLO detection, body follows head |
 | Phase 16 | ✅ Complete | 100% | JSON-driven animation system (50Hz control loop) |
 | Phase 17 | ✅ Complete | 100% | Antenna sync animation during speech |
-| Phase 18 | ❌ Not done | 10% | Camera implemented, missing multi-person gaze |
+| Phase 18 | ✅ Complete | 100% | Single-face visual gaze interaction with idle scanning |
 | Phase 19 | 🟡 Partial | 40% | Gravity compensation mode switch, missing teaching flow |
 | Phase 20 | 🟡 Partial | 30% | IMU sensors exposed, missing trigger logic |
 | Phase 21 | ❌ Not done | 0% | Home Assistant scene integration not implemented |
 | Phase 22 | ✅ Complete | 100% | Gesture detection with HaGRID ONNX models |
 | Phase 24 | ✅ Complete | 100% | System diagnostics with psutil (9 sensors) |
 | **v0.9.5** | ✅ Complete | 100% | Modular architecture refactoring |
+| **v1.0.0** | ✅ Complete | 100% | Runtime toggles/persistence (Sendspin, face, gesture, confidence) + idle and gesture stability updates |
 
-**Overall Completion**: **Phase 1-17 + 22 + 24 + v0.9.5: ~100%** | **Phase 18-21: ~20%**
+**Overall Completion**: **Phase 1-18 + 22 + 24 + v0.9.5/v1.0.0: ~100%** | **Remaining gap: Phase 21 scene integration**
 
 
 ---
