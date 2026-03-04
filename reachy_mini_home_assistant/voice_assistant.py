@@ -210,23 +210,10 @@ class VoiceAssistantService:
                 media.start_playing()
                 _LOGGER.info("Started Reachy Mini playback")
 
-                # Probe early: detect non-throwing startup failures and retry once.
+                # Deterministic startup validation: fail fast instead of repeated
+                # fallback/recovery loops that hide root causes.
                 if not self._probe_audio_capture_ready(media, timeout_s=1.5):
-                    _LOGGER.warning("Audio capture probe failed after startup, retrying media initialization once")
-                    self._ensure_wireless_audio_routing_config()
-                    try:
-                        media.stop_recording()
-                    except Exception:
-                        pass
-                    try:
-                        media.stop_playing()
-                    except Exception:
-                        pass
-                    time.sleep(0.3)
-                    media.start_recording()
-                    media.start_playing()
-                    if not self._probe_audio_capture_ready(media, timeout_s=1.5):
-                        _LOGGER.warning("Audio capture still not ready after retry (wake word may not work)")
+                    raise RuntimeError("Audio capture probe failed after media startup")
 
                 _LOGGER.info("Reachy Mini media system initialized")
 
