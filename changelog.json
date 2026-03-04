@@ -5,12 +5,21 @@
     "changes": [
       "Build: Bump package version to 1.0.0",
       "Deps: Require reachy-mini[gstreamer]>=1.4.1",
-      "Fix: Improve gesture reliability by running gesture detection every frame and reducing smoother latency",
-      "Fix: Prevent false no-gesture results by aligning valid hand crops with detection scores",
-      "Optimize: Keep a minimum gesture processing cadence in camera loop for better responsiveness",
+      "Fix: Improve gesture responsiveness and stability (faster smoothing, min processing cadence, no-gesture alignment)",
+      "Fix: Auto-match ONNX gesture input size from model shape to prevent INVALID_ARGUMENT dimension errors",
+      "New: Add Sendspin switch in ESPHome (default OFF, persistent, runtime enable/disable)",
+      "New: Add Face Tracking and Gesture Detection switches in ESPHome (both default OFF, persistent)",
+      "New: Add Face Confidence number entity (0.0-1.0, persistent)",
+      "Optimize: Unload/reload face and gesture models when toggled off/on to save resources",
+      "Optimize: Idle behavior updated to breathing + look-around alternation, idle antenna sway disabled",
+      "Optimize: Adjust idle breathing to human-like cadence",
+      "Fix: Disable antenna torque in idle mode and re-enable outside idle to reduce chatter/noise",
       "Fix: Harden startup against import-time failures (lazy emotion library loading and graceful Sendspin disable)",
       "Fix: Enforce deterministic audio startup path and fail fast when microphone capture is not ready",
-      "Fix: Ensure audio routing setup before SDK media initialization to avoid unstable OpenAL fallback"
+      "Optimize: Make MJPEG streaming viewer-aware (skip continuous JPEG encode/push when no stream clients)",
+      "Optimize: Keep face/gesture AI processing active even when stream viewers are absent",
+      "Fix: Add on-demand /snapshot JPEG generation when no cached stream frame is available",
+      "Change: Use camera backend default FPS/resolution for stream path instead of forcing fixed 1080p/25fps"
     ]
   },
   {
