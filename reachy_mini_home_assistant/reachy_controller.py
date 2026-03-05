@@ -154,6 +154,23 @@ class ReachyController:
             return
         self._movement_manager.set_idle_motion_enabled(enabled)
 
+    def get_idle_antenna_enabled(self) -> bool:
+        """Get whether idle antenna animation/torque is enabled."""
+        if self._movement_manager is None:
+            return False
+        try:
+            return bool(self._movement_manager.get_idle_antenna_enabled())
+        except Exception as e:
+            logger.debug("Error getting idle antenna state: %s", e)
+            return False
+
+    def set_idle_antenna_enabled(self, enabled: bool) -> None:
+        """Enable or disable idle antenna animation/torque."""
+        if self._movement_manager is None:
+            logger.warning("set_idle_antenna_enabled failed - MovementManager not set")
+            return
+        self._movement_manager.set_idle_antenna_enabled(enabled)
+
     # ========== Phase 1: Basic Status & Volume ==========
 
     @staticmethod
