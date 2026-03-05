@@ -37,37 +37,6 @@ def _ensure_audio_routing_config() -> None:
         logger.warning("Could not ensure audio routing config before startup: %s", e)
 
 
-def _patch_sdk_audio_device_resolution() -> None:
-    """Force deterministic Reachy Mini audio aliases on Linux.
-
-    SDK 1.4.x device monitor can fail and trigger autoaudiosrc/openal fallback.
-    We bypass that path and always return Reachy Mini ALSA aliases once
-    ~/.asoundrc is prepared, so media init uses a single deterministic route.
-    """
-    if not sys.platform.startswith("linux"):
-        return
-
-    try:
-        from reachy_mini.media.audio_gstreamer import GStreamerAudio
-        from reachy_mini.media.audio_utils import has_reachymini_asoundrc
-    except Exception as e:
-        logger.debug("SDK audio patch unavailable: %s", e)
-        return
-
-    original = getattr(GStreamerAudio, "_get_audio_device", None)
-    if original is None or getattr(GStreamerAudio, "_ha_audio_patch_applied", False):
-        return
-
-    def _patched_get_audio_device(self, device_type: str = "Source"):
-        if has_reachymini_asoundrc():
-            return "reachymini_audio_sink" if device_type == "Sink" else "reachymini_audio_src"
-        return original(self, device_type)
-
-    GStreamerAudio._get_audio_device = _patched_get_audio_device
-    GStreamerAudio._ha_audio_patch_applied = True
-    logger.warning("Applied deterministic SDK audio alias patch (no OpenAL fallback path)")
-
-
 def _normalize_home_for_audio_utils() -> None:
     """Normalize HOME on robot so SDK audio_utils resolves ~/.asoundrc reliably."""
     if not sys.platform.startswith("linux"):
@@ -120,7 +89,6 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         _normalize_home_for_audio_utils()
         # Ensure audio routing config before SDK creates media pipelines.
         _ensure_audio_routing_config()
-        _patch_sdk_audio_device_resolution()
 
         # Connect to ReachyMini
         try:
