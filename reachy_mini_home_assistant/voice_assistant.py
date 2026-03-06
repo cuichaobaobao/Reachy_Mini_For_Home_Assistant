@@ -192,11 +192,6 @@ class VoiceAssistantService:
             # Check if media system is already running to avoid conflicts
             media = self.reachy_mini.media
             if media.audio is not None:
-                # SDK >=1.4 switched Linux audio device selection to Pulse/DeviceMonitor.
-                # On wireless robots without a correct ~/.asoundrc, startup may fall back
-                # to autoaudiosrc/openal and fail with "Could not open device".
-                self._ensure_wireless_audio_routing_config()
-
                 # Clean stale media state from previous app sessions (daemon is persistent)
                 try:
                     media.stop_recording()
@@ -317,18 +312,6 @@ class VoiceAssistantService:
                 task.add_done_callback(lambda _task: None)
         except Exception as e:
             _LOGGER.warning("Failed to apply Sendspin toggle (%s): %s", enabled, e)
-
-    def _ensure_wireless_audio_routing_config(self) -> None:
-        """Ensure ALSA routing aliases exist for Reachy Mini audio on Linux wireless."""
-        try:
-            from reachy_mini.media.audio_utils import has_reachymini_asoundrc, write_asoundrc_to_home
-
-            if has_reachymini_asoundrc():
-                return
-            write_asoundrc_to_home()
-            _LOGGER.info("Generated ~/.asoundrc for Reachy Mini audio routing")
-        except Exception as e:
-            _LOGGER.debug("Could not ensure Reachy Mini audio routing config: %s", e)
 
     def _probe_audio_capture_ready(self, media, timeout_s: float = 1.5) -> bool:
         """Check whether microphone samples become available shortly after startup."""
