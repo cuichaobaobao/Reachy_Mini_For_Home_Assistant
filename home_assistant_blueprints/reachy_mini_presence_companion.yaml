@@ -14,10 +14,12 @@ blueprint:
 
     reachy_device:
       name: Reachy device (recommended)
-      description: Select your Reachy device for automatic entity binding.
+      description: Select your Reachy ESPHome device for automatic entity binding.
       default: ""
       selector:
-        device: {}
+        device:
+          filter:
+            - integration: esphome
 
     reachy_wake_button:
       name: Wake Up button (optional fallback)
