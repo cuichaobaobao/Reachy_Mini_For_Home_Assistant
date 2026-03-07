@@ -63,15 +63,12 @@ DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 50
 FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
 ANIMATION_BLEND_DURATION = 0.5  # Seconds to blend animation back when face lost
 
-# Skip sending nearly-identical poses to reduce daemon load
+# Pose epsilon constants are kept for compatibility with existing motion logic.
 POSE_EPS = 1e-3  # Max element delta in 4x4 pose matrix
 ANTENNA_EPS = 0.005  # Radians (~0.29 deg)
 BODY_YAW_EPS = 0.005  # Radians (~0.29 deg)
-MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
 IDLE_POSE_EPS = 0.0018  # Slightly relaxed pose deadband in quiet idle
 IDLE_BODY_YAW_EPS = 0.01  # Slightly relaxed body yaw deadband in quiet idle
-IDLE_MIN_SEND_INTERVAL_S = 0.07  # Higher idle update cadence for smoother continuous motion
-IDLE_ANTENNA_MAX_RATE_RAD_S = 0.5  # Avoid clipping antenna sine wave during idle sway
 IDLE_ANTENNA_EPS = 0.012  # Larger idle antenna deadband to reduce tiny updates
 
 # Idle look-around behavior parameters
@@ -192,10 +189,6 @@ class MovementManager:
         control_rate = max(1.0, float(Config.motion.control_rate_hz or DEFAULT_CONTROL_LOOP_FREQUENCY_HZ))
         self._control_loop_hz = control_rate
         self._target_period = 1.0 / control_rate
-        max_send_rate_hz = max(0.5, float(Config.motion.max_send_rate_hz))
-        self._min_send_interval = 1.0 / max_send_rate_hz
-        self._idle_heartbeat_interval = max(self._min_send_interval, float(Config.motion.idle_heartbeat_interval_s))
-
         # Body yaw smoothing state (rate-limited)
         self._body_yaw_smoothed: float | None = None
         self._last_body_yaw_update = 0.0
@@ -1311,29 +1304,7 @@ class MovementManager:
             target_antenna_left, target_antenna_right
         )
 
-        # In idle, slew-limit antennas to avoid micro-jitter while keeping motion continuous.
-        if self.state.robot_state == RobotState.IDLE:
-            now = self._now()
-            if self._idle_antenna_smoothed is None:
-                self._idle_antenna_smoothed = (antenna_left, antenna_right)
-                self._last_idle_antenna_update = now
-            else:
-                prev_left, prev_right = self._idle_antenna_smoothed
-                dt_idle = max(1e-3, now - (self._last_idle_antenna_update or now))
-                max_step = IDLE_ANTENNA_MAX_RATE_RAD_S * dt_idle
-
-                delta_left = antenna_left - prev_left
-                delta_right = antenna_right - prev_right
-                step_left = max(-max_step, min(max_step, delta_left))
-                step_right = max(-max_step, min(max_step, delta_right))
-
-                smooth_left = prev_left + step_left
-                smooth_right = prev_right + step_right
-
-                self._idle_antenna_smoothed = (smooth_left, smooth_right)
-                self._last_idle_antenna_update = now
-                antenna_left, antenna_right = smooth_left, smooth_right
-        else:
+        if self.state.robot_state != RobotState.IDLE:
             self._idle_antenna_smoothed = None
             self._last_idle_antenna_update = 0.0
 
@@ -1390,66 +1361,6 @@ class MovementManager:
 
         now = self._now()
 
-        # Global hard limit for SDK writes (protect daemon/zenoh from bursts)
-        if now - self._last_send_time < self._min_send_interval:
-            return
-
-        # If pose hasn't changed, only send periodically to reduce daemon load
-        pose_unchanged = False
-        if (
-            self._last_sent_head_pose is not None
-            and self._last_sent_antennas is not None
-            and self._last_sent_body_yaw is not None
-        ):
-            pose_delta = np.max(np.abs(head_pose - self._last_sent_head_pose))
-            antenna_delta = max(
-                abs(antennas[0] - self._last_sent_antennas[0]),
-                abs(antennas[1] - self._last_sent_antennas[1]),
-            )
-            body_yaw_delta = abs(body_yaw - self._last_sent_body_yaw)
-
-            quiet_idle = (
-                self.state.robot_state == RobotState.IDLE
-                and self._pending_action is None
-                and not self.state.face_detected
-                and not self.state.look_around_in_progress
-            )
-
-            idle_animation_active = self.state.robot_state == RobotState.IDLE and (
-                self._idle_motion_enabled or self._idle_antenna_enabled
-            )
-
-            # For active idle animation, disable deadband gating so breathing
-            # and antenna sway are continuously updated (no step-like pauses).
-            if idle_animation_active:
-                pose_eps = 0.0
-                body_yaw_eps = 0.0
-            else:
-                pose_eps = IDLE_POSE_EPS if quiet_idle else POSE_EPS
-                body_yaw_eps = IDLE_BODY_YAW_EPS if quiet_idle else BODY_YAW_EPS
-
-            min_interval = IDLE_MIN_SEND_INTERVAL_S if quiet_idle else MIN_SEND_INTERVAL_S
-            if body_yaw_delta >= Config.motion.body_yaw_deadband_rad:
-                min_interval = Config.motion.body_yaw_min_send_interval_s
-
-            # When idle antenna animation is active, avoid antenna deadband gating
-            # to keep motion continuous and remove perceived step/jerk.
-            if idle_animation_active and self._idle_antenna_enabled:
-                antenna_eps = 0.0
-            else:
-                antenna_eps = IDLE_ANTENNA_EPS if quiet_idle else ANTENNA_EPS
-
-            if pose_delta < pose_eps and antenna_delta < antenna_eps and body_yaw_delta < body_yaw_eps:
-                pose_unchanged = True
-
-                # Do not clamp to the long idle heartbeat interval when idle
-                # animation is active, otherwise antenna/body motion looks stepped.
-                if not idle_animation_active:
-                    min_interval = max(min_interval, self._idle_heartbeat_interval)
-
-                if now - self._last_send_time < min_interval:
-                    return
-
         # Check if we should skip due to connection loss (but always try periodically)
         if self._connection_lost:
             if now - self._last_reconnect_attempt < self._reconnect_attempt_interval:
@@ -1483,9 +1394,6 @@ class MovementManager:
                 self._connection_lost = False
                 self._reconnect_attempt_interval = self._reconnect_backoff_initial
                 self._suppressed_errors = 0
-
-            if pose_unchanged:
-                logger.debug("Sent idle heartbeat command")
 
         except Exception as e:
             error_msg = str(e)
