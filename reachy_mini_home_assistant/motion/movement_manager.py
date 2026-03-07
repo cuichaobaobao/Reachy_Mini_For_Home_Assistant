@@ -69,7 +69,8 @@ MIN_SEND_INTERVAL_S = 0.2  # Legacy unchanged-pose interval fallback
 IDLE_POSE_EPS = 0.0018  # Slightly relaxed pose deadband in quiet idle
 IDLE_BODY_YAW_EPS = 0.01  # Slightly relaxed body yaw deadband in quiet idle
 IDLE_MIN_SEND_INTERVAL_S = 0.20  # Balanced idle smoothness and command pressure
-IDLE_ANTENNA_MAX_RATE_RAD_S = 0.55  # Slew-limit antenna motion in idle for smoother movement
+IDLE_ANTENNA_MAX_RATE_RAD_S = 0.35  # Slower antenna slew for lower mechanical noise
+IDLE_ANTENNA_EPS = 0.012  # Larger idle antenna deadband to reduce tiny updates
 
 # Idle look-around behavior parameters
 IDLE_LOOK_AROUND_MIN_INTERVAL = 6.0  # Minimum seconds between look-arounds
@@ -1188,9 +1189,19 @@ class MovementManager:
             if body_yaw_delta >= Config.motion.body_yaw_deadband_rad:
                 min_interval = Config.motion.body_yaw_min_send_interval_s
 
-            if pose_delta < pose_eps and antenna_delta < ANTENNA_EPS and body_yaw_delta < body_yaw_eps:
+            antenna_eps = IDLE_ANTENNA_EPS if quiet_idle else ANTENNA_EPS
+
+            if pose_delta < pose_eps and antenna_delta < antenna_eps and body_yaw_delta < body_yaw_eps:
                 pose_unchanged = True
-                min_interval = max(min_interval, self._idle_heartbeat_interval)
+
+                # Do not clamp to the long idle heartbeat interval when idle
+                # animation is active, otherwise antenna/body motion looks stepped.
+                idle_animation_active = self.state.robot_state == RobotState.IDLE and (
+                    self._idle_motion_enabled or self._idle_antenna_enabled
+                )
+                if not idle_animation_active:
+                    min_interval = max(min_interval, self._idle_heartbeat_interval)
+
                 if now - self._last_send_time < min_interval:
                     return
 
