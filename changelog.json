@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.3",
+    "date": "2026-03-07",
+    "changes": [
+      "Build: Bump package version to 1.0.3",
+      "New: Add Idle Random Actions switch in Home Assistant with preferences persistence and startup restore",
+      "New: Add configurable idle_random_actions action presets in conversation_animations.json for centralized idle motion tuning",
+      "Fix: Remove duplicate idle_random_actions fields/methods and complete runtime control wiring in controller/entity registry/movement manager",
+      "Improve: Increase idle breathing and antenna sway cadence to 0.24Hz with wiggle antenna profile for more natural standby motion",
+      "Optimize: Remove set_target global rate limiting and unchanged-pose skip gating to continuously stream motion commands each control tick",
+      "Optimize: Remove idle antenna slew-rate limiter so antenna motion follows animation waveforms directly for reference-like smoothness"
+    ]
+  },
+  {
     "version": "1.0.2",
     "date": "2026-03-06",
     "changes": [
