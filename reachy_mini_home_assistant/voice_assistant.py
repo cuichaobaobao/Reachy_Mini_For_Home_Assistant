@@ -17,6 +17,7 @@ from queue import Queue
 from typing import TYPE_CHECKING
 
 import numpy as np
+import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
@@ -618,12 +619,14 @@ class VoiceAssistantService:
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
             try:
-                if self._state is not None and self._state.satellite is not None:
-                    daemon_state = self._state.satellite.reachy_controller.get_daemon_state()
-                    if daemon_state == "running":
-                        _LOGGER.info("Daemon is running, resuming services now")
-                        self._on_pre_resume()
-                        return
+                daemon_url = Config.daemon.url.rstrip("/")
+                response = requests.get(f"{daemon_url}/api/daemon/status", timeout=2.0)
+                response.raise_for_status()
+                daemon_state = (response.json() or {}).get("state", "")
+                if daemon_state == "running":
+                    _LOGGER.info("Daemon is running, resuming services now")
+                    self._on_pre_resume()
+                    return
             except Exception as e:
                 _LOGGER.debug("Wake wait state check failed: %s", e)
 
