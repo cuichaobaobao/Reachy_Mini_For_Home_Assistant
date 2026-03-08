@@ -313,37 +313,26 @@ class ReachyController:
             logger.error(f"Failed to set speaker volume via amixer: {e}")
 
     def get_microphone_volume(self) -> float:
-        """Get microphone volume (0-100) using amixer directly (no HTTP request)."""
+        """Get microphone volume (0-100), preferring daemon volume API."""
         try:
-            # Get the correct card name (from SDK detection logic)
-            card_name = _get_amixer_card_name()
-
-            # Try to get microphone volume from amixer directly
-            result = subprocess.run(
-                ["amixer", "-c", card_name, "sget", "Headset"],
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=1.0,
+            resp = self._http_session.get(
+                f"{self._daemon_base_url}/api/volume/microphone/current",
+                timeout=self._http_timeout,
             )
-            if result.returncode == 0:
-                for line in result.stdout.splitlines():
-                    if "Left:" in line and "[" in line:
-                        parts = line.split("[")
-                        for part in parts:
-                            if "%" in part:
-                                volume_str = part.split("%")[0]
-                                self._microphone_volume = float(volume_str)
-                                return self._microphone_volume
-        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
-            logger.debug(f"Could not get microphone volume from amixer: {e}")
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict) and "volume" in data:
+                self._microphone_volume = float(data["volume"])
+                return self._microphone_volume
+        except Exception as e:
+            logger.warning("Failed to get microphone volume via daemon API: %s", e)
 
-        # Fallback to cached value
+        # Return cached value on API failure.
         return self._microphone_volume
 
     def set_microphone_volume(self, volume: float) -> None:
         """
-        Set microphone volume (0-100) using amixer directly (no HTTP request).
+        Set microphone volume (0-100), preferring daemon volume API.
 
         Args:
             volume: Volume level 0-100
@@ -352,19 +341,19 @@ class ReachyController:
         self._microphone_volume = volume
 
         try:
-            # Get the correct card name (from SDK detection logic)
-            card_name = _get_amixer_card_name()
-
-            # Set microphone volume using amixer directly
-            subprocess.run(
-                ["amixer", "-c", card_name, "sset", "Headset", f"{int(volume)}%"],
-                capture_output=True,
-                timeout=2.0,
-                check=True,
+            resp = self._http_session.post(
+                f"{self._daemon_base_url}/api/volume/microphone/set",
+                json={"volume": int(volume)},
+                timeout=self._http_timeout,
             )
-            logger.info(f"Microphone volume set to {volume}% via amixer (card={card_name})")
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            logger.error(f"Failed to set microphone volume via amixer: {e}")
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict) and "volume" in data:
+                self._microphone_volume = float(data["volume"])
+            logger.info("Microphone volume set to %.1f%% via daemon API", self._microphone_volume)
+            return
+        except Exception as e:
+            logger.error("Failed to set microphone volume via daemon API: %s", e)
 
     # ========== Phase 2: Motor Control ==========
 
