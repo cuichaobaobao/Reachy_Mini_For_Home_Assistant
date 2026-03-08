@@ -102,7 +102,7 @@ class CameraConfig:
     idle_threshold: float = 30.0  # Seconds without face -> idle
 
     # Gesture detection
-    gesture_detection_enabled: bool = True
+    gesture_detection_enabled: bool = False
     gesture_detection_interval: int = 1  # Run every frame for responsive gestures
 
 

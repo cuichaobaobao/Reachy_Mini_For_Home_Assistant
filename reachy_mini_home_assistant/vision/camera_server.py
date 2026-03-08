@@ -61,7 +61,7 @@ class MJPEGCameraServer:
         fps: int = 15,  # 15fps for smooth face tracking
         quality: int = 80,
         enable_face_tracking: bool = True,
-        enable_gesture_detection: bool = True,
+        enable_gesture_detection: bool = False,
         face_confidence_threshold: float = 0.5,  # Min confidence for face detection
         gstreamer_lock: threading.Lock | None = None,
     ):
