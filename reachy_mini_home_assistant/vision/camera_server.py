@@ -33,6 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 # MJPEG boundary string
 MJPEG_BOUNDARY = "frame"
 GESTURE_MIN_FPS = 12.0
+FACE_TRACKING_MIN_FPS = 25.0
 
 
 class MJPEGCameraServer:
@@ -520,6 +521,8 @@ class MJPEGCameraServer:
                 # Sleep to maintain target FPS (use adaptive rate)
                 # Keep a minimum processing cadence for gesture responsiveness.
                 sleep_time = self._frame_rate_manager.get_sleep_interval()
+                if self._face_tracking_enabled and self._head_tracker is not None:
+                    sleep_time = min(sleep_time, 1.0 / FACE_TRACKING_MIN_FPS)
                 if self._gesture_detection_enabled and self._gesture_detector is not None:
                     sleep_time = min(sleep_time, 1.0 / GESTURE_MIN_FPS)
                 time.sleep(sleep_time)
@@ -582,8 +585,8 @@ class MJPEGCameraServer:
                 eye_center_norm = (face_center + 1) / 2
 
                 eye_center_pixels = [
-                    int(eye_center_norm[0] * w),
-                    int(eye_center_norm[1] * h),
+                    float(eye_center_norm[0] * w),
+                    float(eye_center_norm[1] * h),
                 ]
 
                 # Get the head pose needed to look at the target
