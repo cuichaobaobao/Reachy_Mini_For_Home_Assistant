@@ -8,7 +8,6 @@ with Home Assistant via ESPHome protocol for voice control.
 import asyncio
 import logging
 import os
-import pathlib
 import sys
 import threading
 
@@ -18,31 +17,6 @@ from .core import get_health_monitor, get_memory_monitor
 from .voice_assistant import VoiceAssistantService
 
 logger = logging.getLogger(__name__)
-
-
-def _normalize_home_for_audio_utils() -> None:
-    """Normalize HOME on robot so SDK audio_utils resolves ~/.asoundrc reliably."""
-    if not sys.platform.startswith("linux"):
-        return
-
-    current_home = os.environ.get("HOME", "")
-    user = os.environ.get("USER", "pollen")
-    preferred_home = f"/home/{user}"
-    preferred_path = pathlib.Path(preferred_home)
-
-    if not preferred_path.exists():
-        # Fallback for environments where USER is not set as expected.
-        preferred_home = "/home/pollen"
-        preferred_path = pathlib.Path(preferred_home)
-
-    if not preferred_path.exists():
-        return
-
-    # Force deterministic robot HOME for SDK Path.home() checks.
-    # Only adjust when HOME is missing or points outside /home.
-    if not current_home or not current_home.startswith("/home/"):
-        os.environ["HOME"] = preferred_home
-        logger.warning("Adjusted HOME from '%s' to '%s' for audio routing", current_home, preferred_home)
 
 
 class ReachyMiniHaVoice(ReachyMiniApp):
@@ -68,8 +42,6 @@ class ReachyMiniHaVoice(ReachyMiniApp):
         Override wrapped_run to handle Reachy Mini connection failures.
         """
         logger.info("Starting Reachy Mini HA Voice App...")
-
-        _normalize_home_for_audio_utils()
 
         # Connect to ReachyMini
         try:

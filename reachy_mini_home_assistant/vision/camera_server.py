@@ -33,6 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 # MJPEG boundary string
 MJPEG_BOUNDARY = "frame"
 GESTURE_MIN_FPS = 12.0
+FACE_TRACKING_MIN_FPS = 25.0
 
 
 class MJPEGCameraServer:
@@ -60,7 +61,7 @@ class MJPEGCameraServer:
         fps: int = 15,  # 15fps for smooth face tracking
         quality: int = 80,
         enable_face_tracking: bool = True,
-        enable_gesture_detection: bool = True,
+        enable_gesture_detection: bool = False,
         face_confidence_threshold: float = 0.5,  # Min confidence for face detection
         gstreamer_lock: threading.Lock | None = None,
     ):
@@ -138,7 +139,7 @@ class MJPEGCameraServer:
                 fps_idle=0.5,
                 low_power_threshold=5.0,
                 idle_threshold=30.0,
-                gesture_detection_interval=3,
+                gesture_detection_interval=1,
             )
         )
 
@@ -510,12 +511,8 @@ class MJPEGCameraServer:
                         self._process_face_lost_interpolation(current_time)
 
                     # Gesture detection (runs independently of face detection)
-                    # Uses its own frame rate control via should_run_gesture_detection()
-                    if (
-                        self._gesture_detection_enabled
-                        and self._gesture_detector is not None
-                        and self._frame_rate_manager.should_run_gesture_detection()
-                    ):
+                    # Reuse precomputed gate to avoid consuming the gesture counter twice.
+                    if self._gesture_detection_enabled and self._gesture_detector is not None and should_run_gesture:
                         self._process_gesture_detection(frame)
 
                     # Log stats every 30 seconds
@@ -534,6 +531,8 @@ class MJPEGCameraServer:
                 # Sleep to maintain target FPS (use adaptive rate)
                 # Keep a minimum processing cadence for gesture responsiveness.
                 sleep_time = self._frame_rate_manager.get_sleep_interval()
+                if self._face_tracking_enabled and self._head_tracker is not None:
+                    sleep_time = min(sleep_time, 1.0 / FACE_TRACKING_MIN_FPS)
                 if self._gesture_detection_enabled and self._gesture_detector is not None:
                     sleep_time = min(sleep_time, 1.0 / GESTURE_MIN_FPS)
                 time.sleep(sleep_time)
@@ -596,8 +595,8 @@ class MJPEGCameraServer:
                 eye_center_norm = (face_center + 1) / 2
 
                 eye_center_pixels = [
-                    int(eye_center_norm[0] * w),
-                    int(eye_center_norm[1] * h),
+                    float(eye_center_norm[0] * w),
+                    float(eye_center_norm[1] * h),
                 ]
 
                 # Get the head pose needed to look at the target
@@ -668,6 +667,8 @@ class MJPEGCameraServer:
             return  # No change, skip logging
         self._face_tracking_enabled = enabled
         if enabled:
+            # Ensure AI scheduler is active when user re-enables tracking from HA switch.
+            self._frame_rate_manager.resume()
             if self._head_tracker is None:
                 try:
                     from .head_tracker import HeadTracker
@@ -801,6 +802,8 @@ class MJPEGCameraServer:
 
         self._gesture_detection_enabled = enabled
         if enabled:
+            # Ensure AI scheduler is active when user re-enables tracking from HA switch.
+            self._frame_rate_manager.resume()
             if self._gesture_detector is None:
                 try:
                     from .gesture_detector import GestureDetector
