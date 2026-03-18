@@ -180,9 +180,7 @@ class VoiceAssistantService:
         self._state.motion = self._motion
         if self._motion and self._motion.movement_manager:
             idle_enabled = preferences.idle_behavior_enabled
-            self._motion.movement_manager.set_idle_motion_enabled(idle_enabled)
-            self._motion.movement_manager.set_idle_antenna_enabled(idle_enabled)
-            self._motion.movement_manager.set_idle_random_actions_enabled(idle_enabled)
+            self._motion.movement_manager.set_idle_behavior_enabled(idle_enabled)
             _LOGGER.info("Idle behavior restored from preferences: %s", idle_enabled)
 
         # Set sleep/wake callbacks for HA button triggers

@@ -496,6 +496,16 @@ class MovementManager:
         """Get whether idle look-around behavior is enabled."""
         return self._idle_motion_enabled
 
+    def get_idle_behavior_enabled(self) -> bool:
+        """Get whether any idle behavior subsystem is enabled."""
+        return self._idle_behavior_enabled()
+
+    def set_idle_behavior_enabled(self, enabled: bool) -> None:
+        """Thread-safe: Enable or disable all idle behavior subsystems together."""
+        self.set_idle_motion_enabled(enabled)
+        self.set_idle_antenna_enabled(enabled)
+        self.set_idle_random_actions_enabled(enabled)
+
     def set_idle_motion_enabled(self, enabled: bool) -> None:
         """Thread-safe: Enable or disable idle look-around behavior."""
         try:

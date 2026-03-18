@@ -148,6 +148,23 @@ class ReachyController:
             logger.debug("Error getting idle motion state: %s", e)
             return False
 
+    def get_idle_behavior_enabled(self) -> bool:
+        """Get whether any idle behavior subsystem is enabled."""
+        if self._movement_manager is None:
+            return False
+        try:
+            return bool(self._movement_manager.get_idle_behavior_enabled())
+        except Exception as e:
+            logger.debug("Error getting idle behavior state: %s", e)
+            return False
+
+    def set_idle_behavior_enabled(self, enabled: bool) -> None:
+        """Enable or disable all idle behavior subsystems together."""
+        if self._movement_manager is None:
+            logger.warning("set_idle_behavior_enabled failed - MovementManager not set")
+            return
+        self._movement_manager.set_idle_behavior_enabled(enabled)
+
     def set_idle_motion_enabled(self, enabled: bool) -> None:
         """Enable or disable idle look-around behavior."""
         if self._movement_manager is None:

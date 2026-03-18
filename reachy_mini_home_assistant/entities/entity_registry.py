@@ -136,9 +136,7 @@ class EntityRegistry:
             state.save_preferences()
 
     def _set_idle_behavior_enabled(self, enabled: bool) -> None:
-        self.reachy_controller.set_idle_motion_enabled(enabled)
-        self.reachy_controller.set_idle_antenna_enabled(enabled)
-        self.reachy_controller.set_idle_random_actions_enabled(enabled)
+        self.reachy_controller.set_idle_behavior_enabled(enabled)
 
         prefs = self._get_preferences()
         if prefs is not None:
