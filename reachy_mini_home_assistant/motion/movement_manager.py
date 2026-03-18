@@ -249,39 +249,36 @@ class MovementManager:
     # Thread-safe public API (called from any thread)
     # =========================================================================
 
+    def _enqueue_command(self, command: str, payload: Any, warning_label: str, timeout: float = 0.1) -> bool:
+        """Queue a command for the control loop."""
+        try:
+            self._command_queue.put((command, payload), timeout=timeout)
+            return True
+        except Exception:
+            logger.warning("Command queue full, dropping %s command", warning_label)
+            return False
+
     def set_state(self, new_state: RobotState) -> None:
         """Thread-safe: Set robot state."""
-        try:
-            self._command_queue.put(("set_state", new_state), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping set_state command")
+        self._enqueue_command("set_state", new_state, "set_state")
 
     def set_listening(self, listening: bool) -> None:
         """Thread-safe: Set listening state."""
         state = RobotState.LISTENING if listening else RobotState.IDLE
-        try:
-            self._command_queue.put(("set_state", state), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping set_listening command")
+        self._enqueue_command("set_state", state, "set_listening")
 
     def set_thinking(self) -> None:
         """Thread-safe: Set thinking state."""
-        try:
-            self._command_queue.put(("set_state", RobotState.THINKING), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping set_thinking command")
+        self._enqueue_command("set_state", RobotState.THINKING, "set_thinking")
 
     def set_speaking(self, speaking: bool) -> None:
         """Thread-safe: Set speaking state."""
         state = RobotState.SPEAKING if speaking else RobotState.IDLE
-        try:
-            self._command_queue.put(("set_state", state), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping set_speaking command")
+        self._enqueue_command("set_state", state, "set_speaking")
 
     def set_idle(self) -> None:
         """Thread-safe: Return to idle state."""
-        self._command_queue.put(("set_state", RobotState.IDLE))
+        self._enqueue_command("set_state", RobotState.IDLE, "set_idle", timeout=0)
 
     def pause_for_emotion(self) -> None:
         """Thread-safe: Pause control loop while emotion animation is playing.
@@ -404,19 +401,11 @@ class MovementManager:
         Returns:
             True if emotion was queued successfully, False otherwise
         """
-        try:
-            self._command_queue.put(("emotion_move", emotion_name), timeout=0.1)
-            return True
-        except Exception:
-            logger.warning("Command queue full, dropping emotion_move command")
-            return False
+        return self._enqueue_command("emotion_move", emotion_name, "emotion_move")
 
     def queue_action(self, action: PendingAction) -> None:
         """Thread-safe: Queue a motion action."""
-        try:
-            self._command_queue.put(("action", action), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping action command")
+        self._enqueue_command("action", action, "action")
 
     def turn_to_angle(self, yaw_deg: float, duration: float = 0.8) -> None:
         """Thread-safe: Turn head to face a direction."""
@@ -425,24 +414,15 @@ class MovementManager:
             target_yaw=math.radians(yaw_deg),
             duration=duration,
         )
-        try:
-            self._command_queue.put(("action", action), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping turn_to command")
+        self._enqueue_command("action", action, "turn_to")
 
     def nod(self, amplitude_deg: float = 15, duration: float = 0.5) -> None:
         """Thread-safe: Perform a nod gesture."""
-        try:
-            self._command_queue.put(("nod", (amplitude_deg, duration)), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping nod command")
+        self._enqueue_command("nod", (amplitude_deg, duration), "nod")
 
     def shake(self, amplitude_deg: float = 20, duration: float = 0.5) -> None:
         """Thread-safe: Perform a head shake gesture."""
-        try:
-            self._command_queue.put(("shake", (amplitude_deg, duration)), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping shake command")
+        self._enqueue_command("shake", (amplitude_deg, duration), "shake")
 
     def set_speech_sway(self, x: float, y: float, z: float, roll: float, pitch: float, yaw: float) -> None:
         """Thread-safe: Set speech-driven sway offsets.
@@ -454,10 +434,7 @@ class MovementManager:
             x, y, z: Position offsets in meters
             roll, pitch, yaw: Orientation offsets in radians
         """
-        try:
-            self._command_queue.put(("speech_sway", (x, y, z, roll, pitch, yaw)), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping speech_sway command")
+        self._enqueue_command("speech_sway", (x, y, z, roll, pitch, yaw), "speech_sway")
 
     def reset_to_neutral(self, duration: float = 0.5) -> None:
         """Thread-safe: Reset to neutral position."""
@@ -473,7 +450,7 @@ class MovementManager:
             target_antenna_right=0.0,
             duration=duration,
         )
-        self._command_queue.put(("action", action))
+        self._enqueue_command("action", action, "neutral", timeout=0)
 
     def transition_to_idle_rest(self, duration: float = 2.0) -> None:
         """Thread-safe: Smoothly move into the configured idle rest pose."""
@@ -489,7 +466,7 @@ class MovementManager:
             target_antenna_right=self._idle_rest_antenna_right_rad,
             duration=duration,
         )
-        self._command_queue.put(("action", action))
+        self._enqueue_command("action", action, "idle_rest", timeout=0)
 
     def set_camera_server(self, camera_server) -> None:
         """Set the camera server for face tracking offsets.
@@ -530,10 +507,7 @@ class MovementManager:
 
     def set_idle_motion_enabled(self, enabled: bool) -> None:
         """Thread-safe: Enable or disable idle look-around behavior."""
-        try:
-            self._command_queue.put(("set_idle_motion", enabled), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping set_idle_motion command")
+        self._enqueue_command("set_idle_motion", enabled, "set_idle_motion")
 
     def get_idle_antenna_enabled(self) -> bool:
         """Get whether idle antenna animation is enabled."""
@@ -541,10 +515,7 @@ class MovementManager:
 
     def set_idle_antenna_enabled(self, enabled: bool) -> None:
         """Thread-safe: Enable or disable idle antenna animation."""
-        try:
-            self._command_queue.put(("set_idle_antenna", enabled), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping set_idle_antenna command")
+        self._enqueue_command("set_idle_antenna", enabled, "set_idle_antenna")
 
     def get_idle_random_actions_enabled(self) -> bool:
         """Get whether idle random actions are enabled."""
@@ -552,10 +523,7 @@ class MovementManager:
 
     def set_idle_random_actions_enabled(self, enabled: bool) -> None:
         """Thread-safe: Enable or disable idle random actions."""
-        try:
-            self._command_queue.put(("set_idle_random_actions", enabled), timeout=0.1)
-        except Exception:
-            logger.warning("Command queue full, dropping set_idle_random_actions command")
+        self._enqueue_command("set_idle_random_actions", enabled, "set_idle_random_actions")
 
     def _idle_behavior_enabled(self) -> bool:
         """Whether any idle behavior subsystem is currently enabled."""
@@ -581,6 +549,26 @@ class MovementManager:
             self.transition_to_idle_rest(duration=duration)
         else:
             self._apply_idle_rest_pose()
+
+    def _clear_idle_activity(self) -> None:
+        """Clear queued idle actions and related transient state."""
+        self.state.next_look_around_time = 0.0
+        self.state.look_around_in_progress = False
+        self._idle_action_queue.clear()
+        if self._pending_action and self._pending_action.name.startswith("idle_action"):
+            self._pending_action = None
+
+    def _clear_idle_animation(self) -> None:
+        """Stop idle animation offsets immediately."""
+        self._animation_player.stop()
+        self.state.anim_pitch = 0.0
+        self.state.anim_yaw = 0.0
+        self.state.anim_roll = 0.0
+        self.state.anim_x = 0.0
+        self.state.anim_y = 0.0
+        self.state.anim_z = 0.0
+        self.state.anim_antenna_left = 0.0
+        self.state.anim_antenna_right = 0.0
 
     def update_doa(self, angle_deg: float, energy: float) -> bool:
         """Update DOA tracker with new sound direction data.
@@ -942,21 +930,9 @@ class MovementManager:
             self._idle_motion_enabled = enabled
             if not enabled:
                 if not self._idle_behavior_enabled():
-                    self.state.next_look_around_time = 0.0
-                    self.state.look_around_in_progress = False
-                    self._idle_action_queue.clear()
-                    if self._pending_action and self._pending_action.name.startswith("idle_action"):
-                        self._pending_action = None
+                    self._clear_idle_activity()
                 if self.state.robot_state == RobotState.IDLE:
-                    self._animation_player.stop()
-                    self.state.anim_pitch = 0.0
-                    self.state.anim_yaw = 0.0
-                    self.state.anim_roll = 0.0
-                    self.state.anim_x = 0.0
-                    self.state.anim_y = 0.0
-                    self.state.anim_z = 0.0
-                    self.state.anim_antenna_left = 0.0
-                    self.state.anim_antenna_right = 0.0
+                    self._clear_idle_animation()
                     if not self._idle_behavior_enabled():
                         self._transition_or_apply_idle_rest_pose()
             elif self.state.robot_state == RobotState.IDLE:
@@ -971,11 +947,11 @@ class MovementManager:
             self._idle_random_actions_enabled = enabled
             if not enabled:
                 if not self._idle_behavior_enabled():
-                    self.state.next_look_around_time = 0.0
-                    self.state.look_around_in_progress = False
-                self._idle_action_queue.clear()
-                if self._pending_action and self._pending_action.name.startswith("idle_action"):
-                    self._pending_action = None
+                    self._clear_idle_activity()
+                else:
+                    self._idle_action_queue.clear()
+                    if self._pending_action and self._pending_action.name.startswith("idle_action"):
+                        self._pending_action = None
                 if self.state.robot_state == RobotState.IDLE and not self._idle_behavior_enabled():
                     self._transition_or_apply_idle_rest_pose()
             logger.info("Idle random actions %s", "enabled" if enabled else "disabled")
