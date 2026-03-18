@@ -662,6 +662,13 @@ class VoiceSatelliteProtocol(APIServer):
         except Exception as e:
             _LOGGER.debug("Failed to update face tracking during %s: %s", context, e)
 
+    def _enter_motion_state(self, context: str, callback_name: str, *, face_tracking: bool | None = None) -> None:
+        """Apply common transition behavior for listening/thinking/speaking/idle."""
+        self._cancel_delayed_idle_return()
+        if face_tracking is not None:
+            self._set_face_tracking_for_state(face_tracking, context)
+        self._run_motion_state(context, callback_name)
+
     def _run_motion_state(self, context: str, callback_name: str) -> None:
         """Invoke a motion state callback when motion is available."""
         if not self.state.motion_enabled:
@@ -861,30 +868,23 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_listening(self) -> None:
         """Called when listening for speech (HA state: Listening)."""
-        self._cancel_delayed_idle_return()
         # Enable high-frequency face tracking during listening
         self._set_conversation_mode(True)
-        self._set_face_tracking_for_state(True, "listening")
-        self._run_motion_state("listening", "on_listening")
+        self._enter_motion_state("listening", "on_listening", face_tracking=True)
 
     def _reachy_on_thinking(self) -> None:
         """Called when processing speech (HA state: Processing)."""
-        self._cancel_delayed_idle_return()
-        self._set_face_tracking_for_state(True, "thinking")
-        self._run_motion_state("thinking", "on_thinking")
+        self._enter_motion_state("thinking", "on_thinking", face_tracking=True)
 
     def _reachy_on_speaking(self) -> None:
         """Called when TTS is playing (HA state: Responding)."""
-        self._cancel_delayed_idle_return()
-        self._set_face_tracking_for_state(False, "speaking")
-        self._run_motion_state("speaking", "on_speaking_start")
+        self._enter_motion_state("speaking", "on_speaking_start", face_tracking=False)
 
     def _reachy_on_idle(self) -> None:
         """Called when returning to idle state (HA state: Idle)."""
         # Disable high-frequency face tracking, switch to adaptive mode
         self._set_conversation_mode(False)
-        self._set_face_tracking_for_state(True, "idle")
-        self._run_motion_state("idle", "on_idle")
+        self._enter_motion_state("idle", "on_idle", face_tracking=True)
 
     def _set_conversation_mode(self, in_conversation: bool) -> None:
         """Set conversation mode for adaptive face tracking.

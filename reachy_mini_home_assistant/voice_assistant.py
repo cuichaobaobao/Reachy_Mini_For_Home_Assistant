@@ -617,9 +617,9 @@ class VoiceAssistantService:
         # This avoids early media/motion restart failures after long sleep.
         timeout_s = 35.0
         deadline = time.monotonic() + timeout_s
+        daemon_url = Config.daemon.url.rstrip("/")
         while time.monotonic() < deadline:
             try:
-                daemon_url = Config.daemon.url.rstrip("/")
                 response = requests.get(f"{daemon_url}/api/daemon/status", timeout=2.0)
                 response.raise_for_status()
                 daemon_state = (response.json() or {}).get("state", "")
