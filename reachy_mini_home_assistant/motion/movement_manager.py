@@ -865,13 +865,6 @@ class MovementManager:
                 if not self._idle_behavior_enabled():
                     self._apply_idle_rest_pose()
 
-            # Freeze antennas when entering listening mode
-            if payload == RobotState.LISTENING:
-                self._freeze_antennas()
-            elif old_state == RobotState.LISTENING and payload != RobotState.LISTENING:
-                # Start unfreezing when leaving listening mode
-                self._start_antenna_unfreeze()
-
             if payload != RobotState.IDLE:
                 self.state.target_pitch = 0.0
                 self.state.target_yaw = 0.0
