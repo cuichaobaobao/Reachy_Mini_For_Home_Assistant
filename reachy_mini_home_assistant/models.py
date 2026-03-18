@@ -72,6 +72,17 @@ class Preferences:
     gesture_detection_enabled: bool = False
     face_confidence_threshold: float = 0.5
 
+    @property
+    def idle_behavior_enabled(self) -> bool:
+        """Whether any idle behavior feature is enabled."""
+        return self.idle_motion_enabled or self.idle_antenna_enabled or self.idle_random_actions_enabled
+
+    def set_idle_behavior_enabled(self, enabled: bool) -> None:
+        """Keep all idle behavior toggles aligned behind one user-facing switch."""
+        self.idle_motion_enabled = enabled
+        self.idle_antenna_enabled = enabled
+        self.idle_random_actions_enabled = enabled
+
 
 @dataclass
 class ServerState:

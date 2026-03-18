@@ -9,6 +9,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Optional
 
 from ..core.system_diagnostics import get_system_diagnostics
+from ..models import Preferences
 from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
 from .entity_extensions import ButtonEntity, SelectEntity, SensorEntity, SwitchEntity
 from .entity_factory import (
@@ -124,6 +125,102 @@ class EntityRegistry:
             "Electric": "electric1",
             "Dying": "dying1",
         }
+
+    def _get_preferences(self) -> Preferences | None:
+        state = getattr(self.server, "state", None)
+        return state.preferences if state is not None else None
+
+    def _save_preferences(self) -> None:
+        state = getattr(self.server, "state", None)
+        if state is not None:
+            state.save_preferences()
+
+    def _idle_behavior_allows_vision(self) -> bool:
+        prefs = self._get_preferences()
+        return bool(prefs.idle_behavior_enabled) if prefs is not None else False
+
+    def _apply_vision_runtime_state(self) -> None:
+        if self.camera_server is None:
+            return
+
+        prefs = self._get_preferences()
+        if prefs is None:
+            self.camera_server.set_face_tracking_enabled(False)
+            self.camera_server.set_gesture_detection_enabled(False)
+            return
+
+        if not prefs.idle_behavior_enabled:
+            self.camera_server.set_face_tracking_enabled(False)
+            self.camera_server.set_gesture_detection_enabled(False)
+            return
+
+        self.camera_server.set_face_tracking_enabled(bool(prefs.face_tracking_enabled))
+        self.camera_server.set_gesture_detection_enabled(bool(prefs.gesture_detection_enabled))
+
+    def _set_idle_behavior_enabled(self, enabled: bool) -> None:
+        self.reachy_controller.set_idle_behavior_enabled(enabled)
+
+        prefs = self._get_preferences()
+        if prefs is not None:
+            prefs.set_idle_behavior_enabled(enabled)
+            if not enabled:
+                prefs.face_tracking_enabled = False
+                prefs.gesture_detection_enabled = False
+            self._save_preferences()
+
+        self._apply_vision_runtime_state()
+
+    def _make_preference_switch(
+        self,
+        *,
+        key_name: str,
+        name: str,
+        object_id: str,
+        icon: str,
+        getter: Callable[[], bool],
+        setter: Callable[[bool], None],
+    ) -> SwitchEntity:
+        """Create a switch entity with the common registry wiring."""
+        return SwitchEntity(
+            server=self.server,
+            key=get_entity_key(key_name),
+            name=name,
+            object_id=object_id,
+            icon=icon,
+            entity_category=1,
+            value_getter=getter,
+            value_setter=setter,
+        )
+
+    def _make_preference_number(
+        self,
+        *,
+        key_name: str,
+        name: str,
+        object_id: str,
+        icon: str,
+        getter: Callable[[], float],
+        setter: Callable[[float], None],
+        min_value: float,
+        max_value: float,
+        step: float,
+        mode: int = 2,
+    ) -> NumberEntity:
+        """Create a number entity with the common registry wiring."""
+        return NumberEntity(
+            server=self.server,
+            key=get_entity_key(key_name),
+            name=name,
+            object_id=object_id,
+            min_value=min_value,
+            max_value=max_value,
+            step=step,
+            icon=icon,
+            mode=mode,
+            entity_category=1,
+            value_getter=getter,
+            value_setter=setter,
+        )
 
     def setup_all_entities(self, entities: list) -> None:
         """Setup all entity phases.
@@ -254,199 +351,126 @@ class EntityRegistry:
         )
 
         def get_idle_motion_enabled() -> bool:
-            if hasattr(self.server, "state") and self.server.state:
-                prefs = self.server.state.preferences
-                return bool(getattr(prefs, "idle_motion_enabled", False))
-            return False
+            prefs = self._get_preferences()
+            return bool(prefs.idle_behavior_enabled) if prefs is not None else False
 
         def set_idle_motion_enabled(enabled: bool) -> None:
-            rc.set_idle_motion_enabled(enabled)
-            rc.set_idle_antenna_enabled(enabled)
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.idle_motion_enabled = enabled
-                self.server.state.preferences.idle_antenna_enabled = enabled
-                self.server.state.save_preferences()
+            self._set_idle_behavior_enabled(enabled)
 
         entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("idle_motion_enabled"),
-                name="Idle Motion",
+            self._make_preference_switch(
+                key_name="idle_motion_enabled",
+                name="Idle Behavior",
                 object_id="idle_motion_enabled",
                 icon="mdi:motion-play",
-                entity_category=1,
-                value_getter=get_idle_motion_enabled,
-                value_setter=set_idle_motion_enabled,
-            )
-        )
-
-        def get_idle_antenna_enabled() -> bool:
-            if hasattr(self.server, "state") and self.server.state:
-                prefs = self.server.state.preferences
-                return bool(getattr(prefs, "idle_antenna_enabled", False))
-            return False
-
-        def set_idle_antenna_enabled(enabled: bool) -> None:
-            rc.set_idle_antenna_enabled(enabled)
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.idle_antenna_enabled = enabled
-                self.server.state.save_preferences()
-
-        entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("idle_antenna_enabled"),
-                name="Idle Antenna Motion",
-                object_id="idle_antenna_enabled",
-                icon="mdi:antenna",
-                entity_category=1,
-                value_getter=get_idle_antenna_enabled,
-                value_setter=set_idle_antenna_enabled,
-            )
-        )
-
-        def get_idle_random_actions_enabled() -> bool:
-            if hasattr(self.server, "state") and self.server.state:
-                prefs = self.server.state.preferences
-                return bool(getattr(prefs, "idle_random_actions_enabled", False))
-            return False
-
-        def set_idle_random_actions_enabled(enabled: bool) -> None:
-            rc.set_idle_random_actions_enabled(enabled)
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.idle_random_actions_enabled = enabled
-                self.server.state.save_preferences()
-
-        entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("idle_random_actions_enabled"),
-                name="Idle Random Actions",
-                object_id="idle_random_actions_enabled",
-                icon="mdi:dice-multiple",
-                entity_category=1,
-                value_getter=get_idle_random_actions_enabled,
-                value_setter=set_idle_random_actions_enabled,
+                getter=get_idle_motion_enabled,
+                setter=set_idle_motion_enabled,
             )
         )
 
         def get_sendspin_enabled() -> bool:
-            if hasattr(self.server, "state") and self.server.state:
-                prefs = self.server.state.preferences
-                return bool(getattr(prefs, "sendspin_enabled", False))
-            return False
+            prefs = self._get_preferences()
+            return bool(getattr(prefs, "sendspin_enabled", False)) if prefs is not None else False
 
         def set_sendspin_enabled(enabled: bool) -> None:
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.sendspin_enabled = enabled
-                self.server.state.save_preferences()
+            prefs = self._get_preferences()
+            if prefs is not None:
+                prefs.sendspin_enabled = enabled
+                self._save_preferences()
 
             voice_assistant = getattr(self.server, "_voice_assistant_service", None)
             if voice_assistant:
                 voice_assistant.set_sendspin_enabled(enabled)
 
         entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("sendspin_enabled"),
+            self._make_preference_switch(
+                key_name="sendspin_enabled",
                 name="Sendspin",
                 object_id="sendspin_enabled",
                 icon="mdi:speaker-wireless",
-                entity_category=1,
-                value_getter=get_sendspin_enabled,
-                value_setter=set_sendspin_enabled,
+                getter=get_sendspin_enabled,
+                setter=set_sendspin_enabled,
             )
         )
 
         def get_face_tracking_enabled() -> bool:
-            if hasattr(self.server, "state") and self.server.state:
-                return bool(self.server.state.preferences.face_tracking_enabled)
-            return False
+            prefs = self._get_preferences()
+            if prefs is None or not prefs.idle_behavior_enabled:
+                return False
+            return bool(prefs.face_tracking_enabled)
 
         def set_face_tracking_enabled(enabled: bool) -> None:
-            if self.camera_server is not None:
-                self.camera_server.set_face_tracking_enabled(enabled)
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.face_tracking_enabled = enabled
-                try:
-                    self.server.state.save_preferences()
-                except Exception as e:
-                    _LOGGER.warning("Failed to save face tracking preference: %s", e)
+            prefs = self._get_preferences()
+            if prefs is not None:
+                prefs.face_tracking_enabled = bool(enabled and prefs.idle_behavior_enabled)
+                self._save_preferences()
+            self._apply_vision_runtime_state()
 
         entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("face_tracking_enabled"),
+            self._make_preference_switch(
+                key_name="face_tracking_enabled",
                 name="Face Tracking",
                 object_id="face_tracking_enabled",
                 icon="mdi:face-recognition",
-                entity_category=1,
-                value_getter=get_face_tracking_enabled,
-                value_setter=set_face_tracking_enabled,
+                getter=get_face_tracking_enabled,
+                setter=set_face_tracking_enabled,
             )
         )
 
         def get_gesture_detection_enabled() -> bool:
-            if hasattr(self.server, "state") and self.server.state:
-                return bool(self.server.state.preferences.gesture_detection_enabled)
-            return False
+            prefs = self._get_preferences()
+            if prefs is None or not prefs.idle_behavior_enabled:
+                return False
+            return bool(prefs.gesture_detection_enabled)
 
         def set_gesture_detection_enabled(enabled: bool) -> None:
-            if self.camera_server is not None:
-                self.camera_server.set_gesture_detection_enabled(enabled)
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.gesture_detection_enabled = enabled
-                try:
-                    self.server.state.save_preferences()
-                except Exception as e:
-                    _LOGGER.warning("Failed to save gesture detection preference: %s", e)
+            prefs = self._get_preferences()
+            if prefs is not None:
+                prefs.gesture_detection_enabled = bool(enabled and prefs.idle_behavior_enabled)
+                self._save_preferences()
+            self._apply_vision_runtime_state()
 
         entities.append(
-            SwitchEntity(
-                server=self.server,
-                key=get_entity_key("gesture_detection_enabled"),
+            self._make_preference_switch(
+                key_name="gesture_detection_enabled",
                 name="Gesture Detection",
                 object_id="gesture_detection_enabled",
                 icon="mdi:hand-wave",
-                entity_category=1,
-                value_getter=get_gesture_detection_enabled,
-                value_setter=set_gesture_detection_enabled,
+                getter=get_gesture_detection_enabled,
+                setter=set_gesture_detection_enabled,
             )
         )
 
         def get_face_confidence_threshold() -> float:
-            if hasattr(self.server, "state") and self.server.state:
-                return float(self.server.state.preferences.face_confidence_threshold)
-            return 0.5
+            prefs = self._get_preferences()
+            return float(prefs.face_confidence_threshold) if prefs is not None else 0.5
 
         def set_face_confidence_threshold(value: float) -> None:
             value = max(0.0, min(1.0, float(value)))
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.face_confidence_threshold = value
-                self.server.state.save_preferences()
+            prefs = self._get_preferences()
+            if prefs is not None:
+                prefs.face_confidence_threshold = value
+                self._save_preferences()
             if self.camera_server is not None:
                 self.camera_server.set_face_confidence_threshold(value)
 
         entities.append(
-            NumberEntity(
-                server=self.server,
-                key=get_entity_key("face_confidence_threshold"),
+            self._make_preference_number(
+                key_name="face_confidence_threshold",
                 name="Face Confidence",
                 object_id="face_confidence_threshold",
+                icon="mdi:target",
+                getter=get_face_confidence_threshold,
+                setter=set_face_confidence_threshold,
                 min_value=0.0,
                 max_value=1.0,
                 step=0.01,
-                icon="mdi:target",
-                mode=2,
-                entity_category=1,
-                value_getter=get_face_confidence_threshold,
-                value_setter=set_face_confidence_threshold,
             )
         )
 
         _LOGGER.debug(
             "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, "
-            "idle_motion_enabled, idle_antenna_enabled, idle_random_actions_enabled, sendspin_enabled, "
+            "idle_motion_enabled, sendspin_enabled, "
             "face_tracking_enabled, gesture_detection_enabled, "
             "face_confidence_threshold"
         )

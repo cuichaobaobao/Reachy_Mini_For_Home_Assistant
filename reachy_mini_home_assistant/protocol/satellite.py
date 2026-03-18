@@ -5,6 +5,7 @@ import logging
 import math
 import posixpath
 import shutil
+import threading
 import time
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Optional
@@ -63,6 +64,7 @@ from ..reachy_controller import ReachyController
 from .api_server import APIServer
 
 _LOGGER = logging.getLogger(__name__)
+IDLE_RETURN_DELAY_S = 10.0
 
 
 class VoiceSatelliteProtocol(APIServer):
@@ -97,6 +99,8 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Track Home Assistant entity states for change detection
         self._ha_entity_states: dict[str, str] = {}
+        self._idle_return_timer: Optional[threading.Timer] = None
+        self._pipeline_active = False
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
@@ -242,6 +246,7 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.debug("Voice event: type=%s, data=%s", event_type.name, data)
 
         if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_START:
+            self._pipeline_active = True
             self._tts_url = data.get("url")
             self._tts_played = False
             self._continue_conversation = False
@@ -286,6 +291,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
             # Pipeline run ended
+            self._pipeline_active = False
             self._is_streaming_audio = False
 
             # Following reference project pattern
@@ -529,9 +535,19 @@ class VoiceSatelliteProtocol(APIServer):
         """Start microphone streaming after wakeup sound finishes."""
         self._is_streaming_audio = True
 
+    def on_authenticated(self) -> None:
+        """Replay current entity states after ESPHome authentication."""
+        for entity in self.state.entities:
+            if hasattr(entity, "update_state"):
+                try:
+                    entity.update_state()
+                except Exception as e:
+                    _LOGGER.debug("Failed to replay state for %s: %s", getattr(entity, "object_id", entity), e)
+
     def stop(self) -> None:
         """Stop current TTS playback (e.g., user said stop word)."""
         # Ensure pipeline does not re-arm itself after manual stop
+        self._pipeline_active = False
         self._is_streaming_audio = False
         self._continue_conversation = False
         self.state.active_wake_words.discard(self.state.stop_word.id)
@@ -578,6 +594,7 @@ class VoiceSatelliteProtocol(APIServer):
         """
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self._set_stop_word_active(False)
+        self._run_motion_state("speaking_end", "on_speaking_end")
         self.send_messages([VoiceAssistantAnnounceFinished()])
 
         # Check if should continue conversation
@@ -591,9 +608,6 @@ class VoiceSatelliteProtocol(APIServer):
                 "Continuing conversation (our_switch=%s, ha_request=%s)", continuous_mode, self._continue_conversation
             )
 
-            # Play prompt sound to indicate ready for next input
-            self.state.tts_player.play(self.state.wakeup_sound)
-
             # Use same conversation_id for context continuity
             conv_id = self._get_or_create_conversation_id()
             self.send_messages(
@@ -604,18 +618,72 @@ class VoiceSatelliteProtocol(APIServer):
                     )
                 ]
             )
-            self._is_streaming_audio = True
 
             # Stay in listening mode
             self._reachy_on_listening()
+            self.state.tts_player.play(self.state.wakeup_sound, done_callback=self._on_wakeup_sound_finished)
         else:
             self._clear_conversation()
             self.unduck()
             self._is_streaming_audio = False
             _LOGGER.debug("Conversation finished")
 
-            # Reachy Mini: Return to idle
+            # Reachy Mini: Return to idle after a short delay.
+            self._schedule_delayed_idle_return()
+
+    def _cancel_delayed_idle_return(self) -> None:
+        """Cancel any pending delayed transition to idle."""
+        if self._idle_return_timer is not None:
+            self._idle_return_timer.cancel()
+            self._idle_return_timer = None
+
+    def _schedule_delayed_idle_return(self) -> None:
+        """Schedule delayed idle transition after conversation end."""
+        self._cancel_delayed_idle_return()
+
+        def _go_idle() -> None:
+            self._idle_return_timer = None
             self._reachy_on_idle()
+
+        self._idle_return_timer = threading.Timer(IDLE_RETURN_DELAY_S, _go_idle)
+        self._idle_return_timer.daemon = True
+        self._idle_return_timer.start()
+        _LOGGER.debug("Scheduled idle transition in %.1fs", IDLE_RETURN_DELAY_S)
+
+    def _set_face_tracking_for_state(self, enabled: bool, context: str) -> None:
+        """Apply face tracking state consistently across conversation transitions."""
+        if self.camera_server is None:
+            return
+        prefs = getattr(self.state, "preferences", None)
+        if prefs is not None and not bool(getattr(prefs, "idle_behavior_enabled", False)):
+            enabled = False
+        try:
+            self.camera_server.set_face_tracking_enabled(enabled)
+            _LOGGER.debug("Face tracking %s during %s", "enabled" if enabled else "paused", context)
+        except Exception as e:
+            _LOGGER.debug("Failed to update face tracking during %s: %s", context, e)
+
+    def _run_motion_state(self, context: str, callback_name: str) -> None:
+        """Invoke a motion state callback when motion is available."""
+        if not self.state.motion_enabled:
+            if context == "speaking":
+                _LOGGER.warning("Motion disabled, skipping speaking animation")
+            return
+
+        if context in {"thinking", "idle"} and not self.state.reachy_mini:
+            return
+
+        motion = self.state.motion
+        if motion is None:
+            if context == "speaking":
+                _LOGGER.warning("No motion controller, skipping speaking animation")
+            return
+
+        try:
+            _LOGGER.debug("Reachy Mini: %s animation", context.capitalize())
+            getattr(motion, callback_name)()
+        except Exception as e:
+            _LOGGER.error("Reachy Mini motion error: %s", e)
 
     def _set_stop_word_active(self, active: bool) -> None:
         """Toggle stop word detector when model supports runtime activation."""
@@ -638,8 +706,10 @@ class VoiceSatelliteProtocol(APIServer):
     def connection_lost(self, exc):
         super().connection_lost(exc)
         _LOGGER.info("Disconnected from Home Assistant")
+        self._cancel_delayed_idle_return()
         # Clear streaming state on disconnect
         self._is_streaming_audio = False
+        self._pipeline_active = False
         self._tts_url = None
         self._tts_played = False
         self._continue_conversation = False
@@ -793,89 +863,30 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_listening(self) -> None:
         """Called when listening for speech (HA state: Listening)."""
+        self._cancel_delayed_idle_return()
         # Enable high-frequency face tracking during listening
         self._set_conversation_mode(True)
-
-        # Resume face tracking according to user preference (may have been paused during speaking)
-        if self.camera_server is not None:
-            try:
-                enabled = bool(getattr(self.state.preferences, "face_tracking_enabled", False))
-                self.camera_server.set_face_tracking_enabled(enabled)
-            except Exception as e:
-                _LOGGER.debug("Failed to resume face tracking: %s", e)
-
-        if not self.state.motion_enabled:
-            return
-        try:
-            _LOGGER.debug("Reachy Mini: Listening animation")
-            if self.state.motion:
-                self.state.motion.on_listening()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        self._set_face_tracking_for_state(True, "listening")
+        self._run_motion_state("listening", "on_listening")
 
     def _reachy_on_thinking(self) -> None:
         """Called when processing speech (HA state: Processing)."""
-        # Resume face tracking according to user preference (may have been paused during speaking)
-        if self.camera_server is not None:
-            try:
-                enabled = bool(getattr(self.state.preferences, "face_tracking_enabled", False))
-                self.camera_server.set_face_tracking_enabled(enabled)
-            except Exception as e:
-                _LOGGER.debug("Failed to resume face tracking: %s", e)
-
-        if not self.state.motion_enabled or not self.state.reachy_mini:
-            return
-        try:
-            _LOGGER.debug("Reachy Mini: Thinking animation")
-            if self.state.motion:
-                self.state.motion.on_thinking()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        self._cancel_delayed_idle_return()
+        self._set_face_tracking_for_state(True, "thinking")
+        self._run_motion_state("thinking", "on_thinking")
 
     def _reachy_on_speaking(self) -> None:
         """Called when TTS is playing (HA state: Responding)."""
-        # Pause face tracking during speaking - robot will use speaking animation instead
-        if self.camera_server is not None:
-            try:
-                self.camera_server.set_face_tracking_enabled(False)
-                _LOGGER.debug("Face tracking paused during speaking")
-            except Exception as e:
-                _LOGGER.debug("Failed to pause face tracking: %s", e)
-
-        if not self.state.motion_enabled:
-            _LOGGER.warning("Motion disabled, skipping speaking animation")
-            return
-        if not self.state.motion:
-            _LOGGER.warning("No motion controller, skipping speaking animation")
-            return
-
-        try:
-            _LOGGER.debug("Reachy Mini: Starting speaking animation")
-            self.state.motion.on_speaking_start()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        self._cancel_delayed_idle_return()
+        self._set_face_tracking_for_state(False, "speaking")
+        self._run_motion_state("speaking", "on_speaking_start")
 
     def _reachy_on_idle(self) -> None:
         """Called when returning to idle state (HA state: Idle)."""
         # Disable high-frequency face tracking, switch to adaptive mode
         self._set_conversation_mode(False)
-
-        # Resume face tracking according to user preference (may have been paused during speaking)
-        if self.camera_server is not None:
-            try:
-                enabled = bool(getattr(self.state.preferences, "face_tracking_enabled", False))
-                self.camera_server.set_face_tracking_enabled(enabled)
-            except Exception as e:
-                _LOGGER.debug("Failed to resume face tracking: %s", e)
-
-        if not self.state.motion_enabled or not self.state.reachy_mini:
-            return
-        try:
-            _LOGGER.debug("Reachy Mini: Idle animation")
-            if self.state.motion:
-                self.state.motion.on_idle()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        self._set_face_tracking_for_state(True, "idle")
+        self._run_motion_state("idle", "on_idle")
 
     def _set_conversation_mode(self, in_conversation: bool) -> None:
         """Set conversation mode for adaptive face tracking.
@@ -931,6 +942,9 @@ class VoiceSatelliteProtocol(APIServer):
         allowing users to activate the voice assistant with a hand gesture.
         """
         try:
+            if self._pipeline_active:
+                _LOGGER.debug("Ignoring gesture wake trigger while pipeline is active")
+                return
             # The wake word detected event triggers the voice pipeline
             _LOGGER.info("Gesture triggered wake word - starting voice assistant")
             # Set the wake word event to simulate detection
@@ -1022,6 +1036,8 @@ class VoiceSatelliteProtocol(APIServer):
         Stops any current playback and releases resources.
         """
         _LOGGER.info("Suspending VoiceSatellite for sleep...")
+        self._cancel_delayed_idle_return()
+        self._pipeline_active = False
 
         # Stop any current TTS/music
         if self.state.tts_player:

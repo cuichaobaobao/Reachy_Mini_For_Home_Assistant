@@ -21,13 +21,14 @@ import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
-from .audio.microphone import MicrophoneOptimizer, MicrophonePreferences
+from .audio.microphone import MicrophonePreferences
 from .core import Config, SleepManager
 from .core.util import get_mac
 from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
 from .motion.reachy_motion import ReachyMiniMotion
 from .protocol.satellite import VoiceSatelliteProtocol
-from .protocol.zeroconf import HomeAssistantZeroconf
+from .protocol.zeroconf import HomeAssistantZeroconf, get_default_friendly_name
+from .reachy_controller import ReachyController
 from .vision.camera_server import MJPEGCameraServer
 
 if TYPE_CHECKING:
@@ -69,7 +70,7 @@ class VoiceAssistantService:
     def __init__(
         self,
         reachy_mini: ReachyMini,
-        name: str = "Reachy Mini",
+        name: str | None = None,
         host: str = "0.0.0.0",
         port: int = 6053,
         wake_model: str = "okay_nabu",
@@ -77,7 +78,7 @@ class VoiceAssistantService:
         camera_enabled: bool = True,
     ):
         self.reachy_mini = reachy_mini
-        self.name = name
+        self.name = name or get_default_friendly_name()
         self.host = host
         self.port = port
         self.wake_model = wake_model
@@ -179,12 +180,9 @@ class VoiceAssistantService:
         # Set motion controller reference in state
         self._state.motion = self._motion
         if self._motion and self._motion.movement_manager:
-            self._motion.movement_manager.set_idle_motion_enabled(preferences.idle_motion_enabled)
-            self._motion.movement_manager.set_idle_antenna_enabled(preferences.idle_antenna_enabled)
-            self._motion.movement_manager.set_idle_random_actions_enabled(preferences.idle_random_actions_enabled)
-            _LOGGER.info("Idle motion restored from preferences: %s", preferences.idle_motion_enabled)
-            _LOGGER.info("Idle antenna motion restored from preferences: %s", preferences.idle_antenna_enabled)
-            _LOGGER.info("Idle random actions restored from preferences: %s", preferences.idle_random_actions_enabled)
+            idle_enabled = preferences.idle_behavior_enabled
+            self._motion.movement_manager.set_idle_behavior_enabled(idle_enabled)
+            _LOGGER.info("Idle behavior restored from preferences: %s", idle_enabled)
 
         # Set sleep/wake callbacks for HA button triggers
         self._state.on_ha_sleep = self._on_sleep
@@ -658,16 +656,25 @@ class VoiceAssistantService:
                     port=self.camera_port,
                     fps=15,
                     quality=80,
-                    enable_face_tracking=bool(getattr(self._state.preferences, "face_tracking_enabled", False)),
-                    enable_gesture_detection=bool(getattr(self._state.preferences, "gesture_detection_enabled", False)),
+                    enable_face_tracking=bool(
+                        getattr(self._state.preferences, "idle_behavior_enabled", False)
+                        and getattr(self._state.preferences, "face_tracking_enabled", False)
+                    ),
+                    enable_gesture_detection=bool(
+                        getattr(self._state.preferences, "idle_behavior_enabled", False)
+                        and getattr(self._state.preferences, "gesture_detection_enabled", False)
+                    ),
                     gstreamer_lock=self._gstreamer_lock,
                 )
 
                 # Apply persisted vision preferences before camera server start.
                 prefs = self._state.preferences
-                self._camera_server.set_face_tracking_enabled(bool(getattr(prefs, "face_tracking_enabled", False)))
+                vision_allowed = bool(getattr(prefs, "idle_behavior_enabled", False))
+                self._camera_server.set_face_tracking_enabled(
+                    bool(vision_allowed and getattr(prefs, "face_tracking_enabled", False))
+                )
                 self._camera_server.set_gesture_detection_enabled(
-                    bool(getattr(prefs, "gesture_detection_enabled", False))
+                    bool(vision_allowed and getattr(prefs, "gesture_detection_enabled", False))
                 )
                 self._camera_server.set_face_confidence_threshold(
                     float(getattr(prefs, "face_confidence_threshold", 0.5))
@@ -712,21 +719,10 @@ class VoiceAssistantService:
     def _optimize_microphone_settings(self) -> None:
         """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.
 
-        Delegates to MicrophoneOptimizer for actual settings configuration.
+        Delegates to ReachyController's ReSpeaker adapter.
         User preferences from Home Assistant override defaults when available.
         """
         try:
-            # Access ReSpeaker through the media audio system
-            audio = self.reachy_mini.media.audio
-            if audio is None or not hasattr(audio, "_respeaker"):
-                _LOGGER.debug("ReSpeaker not available for optimization")
-                return
-
-            respeaker = audio._respeaker
-            if respeaker is None:
-                _LOGGER.debug("ReSpeaker device not found")
-                return
-
             # Build preferences from saved state
             prefs = self._state.preferences if self._state else None
             mic_prefs = MicrophonePreferences(
@@ -735,9 +731,7 @@ class VoiceAssistantService:
                 noise_suppression=prefs.noise_suppression if prefs else None,
             )
 
-            # Delegate to optimizer
-            optimizer = MicrophoneOptimizer()
-            optimizer.optimize(respeaker, mic_prefs)
+            ReachyController(self.reachy_mini).optimize_microphone_settings(mic_prefs)
 
         except Exception as e:
             _LOGGER.warning("Failed to optimize microphone settings: %s", e)

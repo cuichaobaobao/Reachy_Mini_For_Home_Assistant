@@ -25,6 +25,18 @@ SENDSPIN_SERVICE_TYPE = "_sendspin-server._tcp.local."
 SENDSPIN_DEFAULT_PATH = "/sendspin"
 
 
+def get_default_device_name(prefix: str = "reachy-mini") -> str:
+    """Build a stable zero-config device name from the MAC address."""
+    mac = get_mac().replace(":", "").lower()
+    suffix = mac[-6:] if len(mac) >= 6 else mac or "device"
+    return f"{prefix}-{suffix}" if prefix else suffix
+
+
+def get_default_friendly_name() -> str:
+    """Build a stable friendly name for Home Assistant discovery."""
+    return f"Reachy Mini {get_default_device_name(prefix='')[-6:].upper()}"
+
+
 def get_local_ip() -> str:
     """Get local IP address for mDNS."""
     test_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -43,7 +55,7 @@ class HomeAssistantZeroconf:
 
     def __init__(self, port: int, name: str | None = None, host: str | None = None) -> None:
         self.port = port
-        self.name = name or f"reachy-mini-{get_mac()[:6]}"
+        self.name = name or get_default_device_name()
 
         if not host:
             host = get_local_ip()
@@ -84,18 +96,24 @@ class SendspinDiscovery:
     when a server is found.
     """
 
-    def __init__(self, on_server_found: Callable[[str], "Coroutine[Any, Any, None]"]) -> None:
+    def __init__(
+        self,
+        on_server_found: Callable[[str], "Coroutine[Any, Any, None]"],
+        on_server_removed: Callable[[str], "Coroutine[Any, Any, None]"] | None = None,
+    ) -> None:
         """Initialize Sendspin discovery.
 
         Args:
             on_server_found: Async callback called with server URL when discovered.
         """
         self._on_server_found = on_server_found
+        self._on_server_removed = on_server_removed
         self._loop: asyncio.AbstractEventLoop | None = None
         self._zeroconf: AsyncZeroconf | None = None
         self._browser: AsyncServiceBrowser | None = None
         self._discovery_task: asyncio.Task | None = None
         self._running = False
+        self._known_servers: dict[str, str] = {}
 
     @property
     def is_running(self) -> bool:
@@ -171,6 +189,16 @@ class SendspinDiscovery:
         except Exception as e:
             _LOGGER.error("Error in Sendspin server callback: %s", e)
 
+    async def _handle_service_removed(self, name: str) -> None:
+        """Handle removed service."""
+        url = self._known_servers.pop(name, None)
+        if url is None or self._on_server_removed is None:
+            return
+        try:
+            await self._on_server_removed(url)
+        except Exception as e:
+            _LOGGER.error("Error in Sendspin remove callback: %s", e)
+
 
 class _SendspinServiceListener:
     """Listener for Sendspin server mDNS advertisements."""
@@ -205,6 +233,12 @@ class _SendspinServiceListener:
     def remove_service(self, zeroconf, service_type: str, name: str) -> None:
         """Called when a Sendspin server goes offline."""
         _LOGGER.info("Sendspin server removed: %s", name)
+        if self._discovery._loop is None:
+            return
+        asyncio.run_coroutine_threadsafe(
+            self._discovery._handle_service_removed(name),
+            self._discovery._loop,
+        )
 
     async def _process_service(self, zeroconf, service_type: str, name: str) -> None:
         """Process discovered service and notify callback."""
@@ -221,6 +255,7 @@ class _SendspinServiceListener:
 
             host = addresses[0]
             url = self._build_url(host, info.port, info.properties)
+            self._discovery._known_servers[name] = url
 
             _LOGGER.info("Discovered Sendspin server: %s at %s", name, url)
 

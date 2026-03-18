@@ -90,5 +90,7 @@ class PendingAction:
     target_x: float = 0.0
     target_y: float = 0.0
     target_z: float = 0.0
+    target_antenna_left: float = 0.0
+    target_antenna_right: float = 0.0
     duration: float = 0.5
     callback: Callable | None = None

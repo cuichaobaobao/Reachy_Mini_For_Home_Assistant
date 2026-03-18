@@ -2,8 +2,6 @@
 
 import logging
 import math
-import platform
-import subprocess
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -11,50 +9,13 @@ import numpy as np
 import requests
 from scipy.spatial.transform import Rotation as R
 
+from .audio.microphone import MicrophoneOptimizer, MicrophonePreferences
 from .core.config import Config
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
 
 logger = logging.getLogger(__name__)
-
-# Audio device card names for amixer commands (from SDK)
-DEVICE_CARD_NAMES = {
-    "reachy_mini_audio": "reachy_mini_audio",
-    "respeaker": "respeaker",
-    "default": "Audio",  # Default to Reachy Mini Audio
-}
-
-
-def _detect_audio_device() -> str:
-    """Detect the current audio output device (from SDK)."""
-    system = platform.system()
-
-    if system == "Linux":
-        # Try to detect if Reachy Mini Audio or legacy Respeaker is available
-        try:
-            result = subprocess.run(
-                ["aplay", "-l"],
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=1.0,
-            )
-            output_lower = result.stdout.lower()
-            if "reachy mini audio" in output_lower:
-                return "reachy_mini_audio"
-            elif "respeaker" in output_lower:
-                return "respeaker"
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            pass
-        return "default"
-    return "unknown"
-
-
-def _get_amixer_card_name() -> str:
-    """Get the appropriate card name for Linux amixer commands (from SDK)."""
-    device = _detect_audio_device()
-    return DEVICE_CARD_NAMES.get(device, DEVICE_CARD_NAMES["default"])
 
 
 class _ReSpeakerContext:
@@ -147,6 +108,23 @@ class ReachyController:
         except Exception as e:
             logger.debug("Error getting idle motion state: %s", e)
             return False
+
+    def get_idle_behavior_enabled(self) -> bool:
+        """Get whether any idle behavior subsystem is enabled."""
+        if self._movement_manager is None:
+            return False
+        try:
+            return bool(self._movement_manager.get_idle_behavior_enabled())
+        except Exception as e:
+            logger.debug("Error getting idle behavior state: %s", e)
+            return False
+
+    def set_idle_behavior_enabled(self, enabled: bool) -> None:
+        """Enable or disable all idle behavior subsystems together."""
+        if self._movement_manager is None:
+            logger.warning("set_idle_behavior_enabled failed - MovementManager not set")
+            return
+        self._movement_manager.set_idle_behavior_enabled(enabled)
 
     def set_idle_motion_enabled(self, enabled: bool) -> None:
         """Enable or disable idle look-around behavior."""
@@ -252,119 +230,73 @@ class ReachyController:
             return "Robot not available"
         return str(self._status_value(status, "error", "") or "")
 
-    def get_speaker_volume(self) -> float:
-        """Get speaker volume (0-100) using amixer directly (no HTTP request)."""
+    def _get_volume_via_api(self, path: str, cached_value: float, label: str) -> float:
+        """Fetch a volume value from the daemon API, falling back to the cached value."""
         try:
-            # Get the correct card name (from SDK detection logic)
-            card_name = _get_amixer_card_name()
-
-            # Try to get speaker volume from amixer directly
-            result = subprocess.run(
-                ["amixer", "-c", card_name, "sget", "PCM"],
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=1.0,
+            resp = self._http_session.get(
+                f"{self._daemon_base_url}{path}",
+                timeout=self._http_timeout,
             )
-            if result.returncode == 0:
-                for line in result.stdout.splitlines():
-                    if "Left:" in line and "[" in line:
-                        parts = line.split("[")
-                        for part in parts:
-                            if "%" in part:
-                                volume_str = part.split("%")[0]
-                                self._speaker_volume = float(volume_str)
-                                return self._speaker_volume
-        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
-            logger.debug(f"Could not get speaker volume from amixer: {e}")
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict) and "volume" in data:
+                return float(data["volume"])
+        except Exception as e:
+            logger.warning("Failed to get %s volume via daemon API: %s", label, e)
 
-        # Fallback to cached value
+        return cached_value
+
+    def _set_volume_via_api(self, path: str, volume: float, label: str) -> float:
+        """Write a volume value through the daemon API and return the confirmed level."""
+        try:
+            resp = self._http_session.post(
+                f"{self._daemon_base_url}{path}",
+                json={"volume": int(volume)},
+                timeout=self._http_timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if isinstance(data, dict) and "volume" in data:
+                return float(data["volume"])
+            return volume
+        except Exception as e:
+            logger.error("Failed to set %s volume via daemon API: %s", label, e)
+            return volume
+
+    def get_speaker_volume(self) -> float:
+        """Get speaker volume (0-100) from the daemon volume API."""
+        self._speaker_volume = self._get_volume_via_api("/api/volume/current", self._speaker_volume, "speaker")
         return self._speaker_volume
 
     def set_speaker_volume(self, volume: float) -> None:
-        """
-        Set speaker volume (0-100) using amixer directly (no HTTP request).
-
-        Args:
-            volume: Volume level 0-100
-        """
+        """Set speaker volume (0-100) through the daemon volume API."""
         volume = max(0.0, min(100.0, volume))
-        self._speaker_volume = volume
-
-        try:
-            # Get the correct card name (from SDK detection logic)
-            card_name = _get_amixer_card_name()
-
-            # Set speaker volume using amixer directly
-            subprocess.run(
-                ["amixer", "-c", card_name, "sset", "PCM", f"{int(volume)}%"],
-                capture_output=True,
-                timeout=2.0,
-                check=True,
-            )
-            subprocess.run(
-                ["amixer", "-c", card_name, "sset", "PCM,1", "100%"],
-                capture_output=True,
-                timeout=2.0,
-                check=True,
-            )
-            logger.info(f"Speaker volume set to {volume}% via amixer (card={card_name})")
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            logger.error(f"Failed to set speaker volume via amixer: {e}")
+        self._speaker_volume = self._set_volume_via_api("/api/volume/set", volume, "speaker")
+        logger.info("Speaker volume set to %.1f%% via daemon API", self._speaker_volume)
 
     def get_microphone_volume(self) -> float:
-        """Get microphone volume (0-100) using amixer directly (no HTTP request)."""
-        try:
-            # Get the correct card name (from SDK detection logic)
-            card_name = _get_amixer_card_name()
-
-            # Try to get microphone volume from amixer directly
-            result = subprocess.run(
-                ["amixer", "-c", card_name, "sget", "Headset"],
-                capture_output=True,
-                text=True,
-                check=False,
-                timeout=1.0,
-            )
-            if result.returncode == 0:
-                for line in result.stdout.splitlines():
-                    if "Left:" in line and "[" in line:
-                        parts = line.split("[")
-                        for part in parts:
-                            if "%" in part:
-                                volume_str = part.split("%")[0]
-                                self._microphone_volume = float(volume_str)
-                                return self._microphone_volume
-        except (subprocess.TimeoutExpired, FileNotFoundError, ValueError) as e:
-            logger.debug(f"Could not get microphone volume from amixer: {e}")
-
-        # Fallback to cached value
+        """Get microphone volume (0-100), preferring daemon volume API."""
+        self._microphone_volume = self._get_volume_via_api(
+            "/api/volume/microphone/current",
+            self._microphone_volume,
+            "microphone",
+        )
         return self._microphone_volume
 
     def set_microphone_volume(self, volume: float) -> None:
         """
-        Set microphone volume (0-100) using amixer directly (no HTTP request).
+        Set microphone volume (0-100), preferring daemon volume API.
 
         Args:
             volume: Volume level 0-100
         """
         volume = max(0.0, min(100.0, volume))
-        self._microphone_volume = volume
-
-        try:
-            # Get the correct card name (from SDK detection logic)
-            card_name = _get_amixer_card_name()
-
-            # Set microphone volume using amixer directly
-            subprocess.run(
-                ["amixer", "-c", card_name, "sset", "Headset", f"{int(volume)}%"],
-                capture_output=True,
-                timeout=2.0,
-                check=True,
-            )
-            logger.info(f"Microphone volume set to {volume}% via amixer (card={card_name})")
-        except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.CalledProcessError) as e:
-            logger.error(f"Failed to set microphone volume via amixer: {e}")
+        self._microphone_volume = self._set_volume_via_api(
+            "/api/volume/microphone/set",
+            volume,
+            "microphone",
+        )
+        logger.info("Microphone volume set to %.1f%% via daemon API", self._microphone_volume)
 
     # ========== Phase 2: Motor Control ==========
 
@@ -506,10 +438,40 @@ class ReachyController:
             logger.error(f"Error executing sleep: {e}")
 
     def _daemon_command(self, path: str, params: dict[str, str] | None = None) -> None:
-        """Send a daemon command request with lightweight validation."""
+        """Send a daemon command request and wait for the daemon state to settle."""
         url = f"{self._daemon_base_url}{path}"
         resp = self._http_session.post(url, params=params or {}, timeout=self._http_timeout)
         resp.raise_for_status()
+
+        desired_state = None
+        if path.endswith("/start"):
+            desired_state = "running"
+        elif path.endswith("/stop"):
+            desired_state = "stopped"
+
+        if desired_state is not None:
+            self._wait_for_daemon_state(desired_state)
+
+    def _wait_for_daemon_state(self, desired_state: str, timeout: float = 10.0) -> None:
+        """Poll daemon status until the requested state is reached."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            try:
+                resp = self._http_session.get(
+                    f"{self._daemon_base_url}/api/daemon/status",
+                    timeout=self._http_timeout,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                current_state = str(data.get("state", "")).lower()
+                if current_state == desired_state:
+                    self._last_status_query = 0.0
+                    return
+            except Exception as e:
+                logger.debug("Waiting for daemon state %s failed: %s", desired_state, e)
+            time.sleep(0.2)
+
+        logger.warning("Timed out waiting for daemon state '%s'", desired_state)
 
     # ========== Phase 3: Pose Control ==========
 
@@ -905,6 +867,15 @@ class ReachyController:
         except Exception:
             return _ReSpeakerContext(None, self._respeaker_lock)
 
+    def optimize_microphone_settings(self, preferences: MicrophonePreferences) -> None:
+        """Apply microphone optimization through the centralized ReSpeaker adapter."""
+        with self._get_respeaker() as respeaker:
+            if respeaker is None:
+                logger.debug("ReSpeaker not available for optimization")
+                return
+            optimizer = MicrophoneOptimizer()
+            optimizer.optimize(respeaker, preferences)
+
     # ========== Phase 12: Audio Processing (via local SDK with thread-safe access) ==========
 
     def get_agc_enabled(self) -> bool:
@@ -1029,8 +1000,8 @@ class ReachyController:
         if not self.is_available:
             return None
         try:
-            if self.reachy.media and self.reachy.media.audio:
-                return self.reachy.media.audio.get_DoA()
+            if self.reachy.media and hasattr(self.reachy.media, "get_DoA"):
+                return self.reachy.media.get_DoA()
         except Exception as e:
             logger.debug(f"Error getting DOA: {e}")
         return None

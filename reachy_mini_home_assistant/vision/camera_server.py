@@ -33,6 +33,7 @@ _LOGGER = logging.getLogger(__name__)
 # MJPEG boundary string
 MJPEG_BOUNDARY = "frame"
 GESTURE_MIN_FPS = 12.0
+FACE_TRACKING_MIN_FPS = 15.0
 
 
 class MJPEGCameraServer:
@@ -60,7 +61,7 @@ class MJPEGCameraServer:
         fps: int = 15,  # 15fps for smooth face tracking
         quality: int = 80,
         enable_face_tracking: bool = True,
-        enable_gesture_detection: bool = True,
+        enable_gesture_detection: bool = False,
         face_confidence_threshold: float = 0.5,  # Min confidence for face detection
         gstreamer_lock: threading.Lock | None = None,
     ):
@@ -98,15 +99,15 @@ class MJPEGCameraServer:
 
         # Face tracking state
         self._head_tracker = None
-        self._face_tracking_enabled = enable_face_tracking
         self._face_tracking_requested = enable_face_tracking
+        self._face_tracking_enabled = enable_face_tracking
         self._face_tracking_offsets: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_tracking_lock = threading.Lock()
 
         # Gesture detection state
         self._gesture_detector = None
-        self._gesture_detection_enabled = enable_gesture_detection
         self._gesture_detection_requested = enable_gesture_detection
+        self._gesture_detection_enabled = enable_gesture_detection
         self._current_gesture = "none"
         self._gesture_confidence = 0.0
         self._gesture_lock = threading.Lock()
@@ -138,7 +139,7 @@ class MJPEGCameraServer:
                 fps_idle=0.5,
                 low_power_threshold=5.0,
                 idle_threshold=30.0,
-                gesture_detection_interval=3,
+                gesture_detection_interval=2,
             )
         )
 
@@ -146,6 +147,39 @@ class MJPEGCameraServer:
         self._active_stream_clients: set = set()
         self._stream_client_lock = threading.Lock()
         self._next_client_id = 0
+
+    def _load_head_tracker(self) -> bool:
+        """Load the head tracker model using the current threshold."""
+        try:
+            from .head_tracker import HeadTracker
+
+            self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
+            self._face_tracking_enabled = True
+            return True
+        except Exception as e:
+            _LOGGER.warning("Failed to load head tracker: %s", e)
+            self._head_tracker = None
+            self._face_tracking_enabled = False
+            return False
+
+    def _load_gesture_detector(self) -> bool:
+        """Load the gesture detector model when available."""
+        try:
+            from .gesture_detector import GestureDetector
+
+            self._gesture_detector = GestureDetector()
+            if self._gesture_detector.is_available:
+                self._gesture_detection_enabled = True
+                return True
+
+            self._gesture_detector = None
+            self._gesture_detection_enabled = False
+            return False
+        except Exception as e:
+            _LOGGER.warning("Failed to load gesture detector: %s", e)
+            self._gesture_detector = None
+            self._gesture_detection_enabled = False
+            return False
 
     async def start(self) -> None:
         """Start the MJPEG camera server."""
@@ -173,39 +207,19 @@ class MJPEGCameraServer:
 
         # Initialize head tracker if face tracking enabled
         if self._face_tracking_enabled:
-            try:
-                from .head_tracker import HeadTracker
-
-                self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
+            if self._load_head_tracker():
                 _LOGGER.info(
                     "Face tracking enabled with YOLO head tracker (confidence=%.2f)", self._face_confidence_threshold
                 )
-            except ImportError as e:
-                _LOGGER.error("Failed to import head tracker: %s", e)
-                self._head_tracker = None
-            except Exception as e:
-                _LOGGER.warning("Failed to initialize head tracker: %s", e)
-                self._head_tracker = None
         else:
             _LOGGER.info("Face tracking disabled by configuration")
 
         # Initialize gesture detector
         if self._gesture_detection_enabled:
-            try:
-                from .gesture_detector import GestureDetector
-
-                self._gesture_detector = GestureDetector()
-                if self._gesture_detector.is_available:
-                    _LOGGER.info("Gesture detection enabled (18 HaGRID classes)")
-                else:
-                    _LOGGER.warning("Gesture detection not available")
-                    self._gesture_detector = None
-            except ImportError as e:
-                _LOGGER.warning("Failed to import gesture detector: %s", e)
-                self._gesture_detector = None
-            except Exception as e:
-                _LOGGER.warning("Failed to initialize gesture detector: %s", e)
-                self._gesture_detector = None
+            if self._load_gesture_detector():
+                _LOGGER.info("Gesture detection enabled (18 HaGRID classes)")
+            else:
+                _LOGGER.warning("Gesture detection not available")
 
         # Start frame capture thread
         self._capture_thread = threading.Thread(target=self._capture_frames, daemon=True, name="camera-capture")
@@ -230,17 +244,9 @@ class MJPEGCameraServer:
         - HTTP server
         - ML models (head tracker, gesture detector)
         - Frame buffers and state
-        - SDK media resources
         """
         _LOGGER.info("Stopping MJPEG camera server...")
         self._running = False
-
-        # 0. Close SDK media resources to prevent leaks
-        try:
-            self.reachy_mini.media.close()
-            _LOGGER.info("SDK media resources closed")
-        except Exception as e:
-            _LOGGER.debug("Failed to close SDK media: %s", e)
 
         # 1. Stop capture thread
         if self._capture_thread:
@@ -344,6 +350,7 @@ class MJPEGCameraServer:
             self._gesture_confidence = 0.0
 
         _LOGGER.info("Camera processing suspended - ML models released")
+        self._log_vision_runtime_state("Suspended")
 
     def resume_processing(self) -> None:
         """Resume AI processing after sleep mode.
@@ -354,44 +361,25 @@ class MJPEGCameraServer:
         _LOGGER.info("Resuming camera processing after sleep...")
 
         # Resume frame rate manager
-        self._frame_rate_manager.resume()
+        if self._face_tracking_requested or self._gesture_detection_requested:
+            self._frame_rate_manager.resume()
 
-        # Restore runtime states from requested user preferences
-        self._face_tracking_enabled = self._face_tracking_requested
-        self._gesture_detection_enabled = self._gesture_detection_requested
-
-        # Reload head tracker if face tracking is requested
+        # Reload head tracker if face tracking was originally enabled
         if self._face_tracking_requested and self._head_tracker is None:
-            try:
-                from .head_tracker import HeadTracker
-
-                self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
-                self._face_tracking_enabled = True
+            if self._load_head_tracker():
                 _LOGGER.info("Head tracker model reloaded (confidence=%.2f)", self._face_confidence_threshold)
-            except Exception as e:
-                _LOGGER.warning("Failed to reload head tracker: %s", e)
-                self._face_tracking_enabled = False
+        else:
+            self._face_tracking_enabled = self._face_tracking_requested and self._head_tracker is not None
 
-        # Reload gesture detector only if gesture detection is requested
+        # Reload gesture detector
         if self._gesture_detection_requested and self._gesture_detector is None:
-            try:
-                from .gesture_detector import GestureDetector
-
-                self._gesture_detector = GestureDetector()
-                if self._gesture_detector.is_available:
-                    self._gesture_detection_enabled = True
-                    _LOGGER.info("Gesture detector model reloaded")
-                else:
-                    self._gesture_detector = None
-                    self._gesture_detection_enabled = False
-            except Exception as e:
-                _LOGGER.warning("Failed to reload gesture detector: %s", e)
-                self._gesture_detection_enabled = False
-        elif not self._gesture_detection_requested:
-            self._gesture_detector = None
-            self._gesture_detection_enabled = False
+            if self._load_gesture_detector():
+                _LOGGER.info("Gesture detector model reloaded")
+        else:
+            self._gesture_detection_enabled = self._gesture_detection_requested and self._gesture_detector is not None
 
         _LOGGER.info("Camera processing resumed - full functionality restored")
+        self._log_vision_runtime_state("Resumed")
 
     def suspend(self) -> None:
         """Fully suspend the camera server for sleep mode.
@@ -510,12 +498,8 @@ class MJPEGCameraServer:
                         self._process_face_lost_interpolation(current_time)
 
                     # Gesture detection (runs independently of face detection)
-                    # Uses its own frame rate control via should_run_gesture_detection()
-                    if (
-                        self._gesture_detection_enabled
-                        and self._gesture_detector is not None
-                        and self._frame_rate_manager.should_run_gesture_detection()
-                    ):
+                    # Reuse precomputed gate to avoid consuming the gesture counter twice.
+                    if self._gesture_detection_enabled and self._gesture_detector is not None and should_run_gesture:
                         self._process_gesture_detection(frame)
 
                     # Log stats every 30 seconds
@@ -534,6 +518,8 @@ class MJPEGCameraServer:
                 # Sleep to maintain target FPS (use adaptive rate)
                 # Keep a minimum processing cadence for gesture responsiveness.
                 sleep_time = self._frame_rate_manager.get_sleep_interval()
+                if self._face_tracking_enabled and self._head_tracker is not None:
+                    sleep_time = min(sleep_time, 1.0 / FACE_TRACKING_MIN_FPS)
                 if self._gesture_detection_enabled and self._gesture_detector is not None:
                     sleep_time = min(sleep_time, 1.0 / GESTURE_MIN_FPS)
                 time.sleep(sleep_time)
@@ -596,8 +582,8 @@ class MJPEGCameraServer:
                 eye_center_norm = (face_center + 1) / 2
 
                 eye_center_pixels = [
-                    int(eye_center_norm[0] * w),
-                    int(eye_center_norm[1] * h),
+                    float(eye_center_norm[0] * w),
+                    float(eye_center_norm[1] * h),
                 ]
 
                 # Get the head pose needed to look at the target
@@ -661,32 +647,39 @@ class MJPEGCameraServer:
         """
         return self._face_interpolator.is_face_detected()
 
+    def _log_vision_runtime_state(self, source: str) -> None:
+        """Log requested and active vision state together."""
+        _LOGGER.info(
+            "%s vision state: face requested=%s active=%s, gesture requested=%s active=%s",
+            source,
+            self._face_tracking_requested,
+            self._face_tracking_enabled,
+            self._gesture_detection_requested,
+            self._gesture_detection_enabled,
+        )
+
     def set_face_tracking_enabled(self, enabled: bool) -> None:
         """Enable or disable face tracking."""
-        self._face_tracking_requested = enabled
-        if self._face_tracking_enabled == enabled:
+        if self._face_tracking_requested == enabled and self._face_tracking_enabled == enabled:
             return  # No change, skip logging
+        self._face_tracking_requested = enabled
         self._face_tracking_enabled = enabled
         if enabled:
+            # Ensure AI scheduler is active when user re-enables tracking from HA switch.
+            self._frame_rate_manager.resume()
             if self._head_tracker is None:
-                try:
-                    from .head_tracker import HeadTracker
-
-                    self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
-                except Exception as e:
-                    _LOGGER.warning("Failed to enable face tracking model: %s", e)
-                    self._face_tracking_enabled = False
+                self._load_head_tracker()
         else:
             # Start interpolation back to neutral
             self._face_interpolator.reset_interpolation()
             self._head_tracker = None
             with self._face_tracking_lock:
                 self._face_tracking_offsets = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        _LOGGER.info("Face tracking %s", "enabled" if enabled else "disabled")
+        self._log_vision_runtime_state("Face toggle")
 
     def get_face_tracking_enabled(self) -> bool:
         """Return whether face tracking is enabled."""
-        return self._face_tracking_enabled
+        return self._face_tracking_requested
 
     def get_face_confidence_threshold(self) -> float:
         """Return current face confidence threshold (0-1)."""
@@ -701,15 +694,9 @@ class MJPEGCameraServer:
         self._face_confidence_threshold = threshold
 
         # Reload model to apply threshold immediately when enabled.
-        if self._face_tracking_enabled:
-            try:
-                from .head_tracker import HeadTracker
-
-                self._head_tracker = HeadTracker(confidence_threshold=self._face_confidence_threshold)
-            except Exception as e:
-                _LOGGER.warning("Failed to apply face confidence threshold %.2f: %s", threshold, e)
-                self._head_tracker = None
-                self._face_tracking_enabled = False
+        if self._face_tracking_requested:
+            if not self._load_head_tracker():
+                _LOGGER.warning("Failed to apply face confidence threshold %.2f", threshold)
 
         _LOGGER.info("Face confidence threshold set to %.2f", self._face_confidence_threshold)
 
@@ -795,34 +782,26 @@ class MJPEGCameraServer:
 
     def set_gesture_detection_enabled(self, enabled: bool) -> None:
         """Enable or disable gesture detection."""
-        self._gesture_detection_requested = enabled
-        if self._gesture_detection_enabled == enabled:
+        if self._gesture_detection_requested == enabled and self._gesture_detection_enabled == enabled:
             return
 
+        self._gesture_detection_requested = enabled
         self._gesture_detection_enabled = enabled
         if enabled:
+            # Ensure AI scheduler is active when user re-enables tracking from HA switch.
+            self._frame_rate_manager.resume()
             if self._gesture_detector is None:
-                try:
-                    from .gesture_detector import GestureDetector
-
-                    self._gesture_detector = GestureDetector()
-                    if not self._gesture_detector.is_available:
-                        self._gesture_detector = None
-                        self._gesture_detection_enabled = False
-                except Exception as e:
-                    _LOGGER.warning("Failed to enable gesture detector model: %s", e)
-                    self._gesture_detection_enabled = False
-                    self._gesture_detector = None
+                self._load_gesture_detector()
         else:
             self._gesture_detector = None
             with self._gesture_lock:
                 self._current_gesture = "none"
                 self._gesture_confidence = 0.0
-        _LOGGER.info("Gesture detection %s", "enabled" if enabled else "disabled")
+        self._log_vision_runtime_state("Gesture toggle")
 
     def get_gesture_detection_enabled(self) -> bool:
         """Return whether gesture detection is enabled."""
-        return self._gesture_detection_enabled
+        return self._gesture_detection_requested
 
     def set_gesture_state_callback(self, callback) -> None:
         """Set callback to notify when gesture state changes."""
@@ -852,14 +831,7 @@ class MJPEGCameraServer:
                     self._gstreamer_lock.release()
             else:
                 _LOGGER.debug("GStreamer lock busy, skipping camera frame")
-                # Flush SDK video buffer to prevent buffer overflow during lock contention
-                try:
-                    if hasattr(self.reachy_mini.media, "flush"):
-                        self.reachy_mini.media.flush()
-                    elif hasattr(self.reachy_mini.media, "flush_video"):
-                        self.reachy_mini.media.flush_video()
-                except Exception:
-                    pass
+                return None
                 return None
         except Exception as e:
             _LOGGER.debug("Failed to get camera frame: %s", e)

@@ -4,7 +4,7 @@ Sendspin integration allows synchronized multi-room audio playback through
 a Sendspin server. Reachy Mini connects as a PLAYER to receive audio streams
 from Home Assistant or other Sendspin controllers.
 
-Sendspin is automatically enabled by default - no user configuration needed.
+Sendspin can be enabled by the runtime integration when a server is discovered.
 The system uses mDNS to discover Sendspin servers on the local network.
 """
 
@@ -111,6 +111,7 @@ class AudioPlayer:
         self._sendspin_url: str | None = None
         self._sendspin_discovery: SendspinDiscovery | None = None
         self._sendspin_unsubscribers: list[Callable] = []
+        self._known_sendspin_servers: set[str] = set()
 
         # Audio buffer for Sendspin playback
         self._sendspin_audio_format: PCMFormat | None = None
@@ -187,7 +188,7 @@ class AudioPlayer:
         from ..protocol.zeroconf import SendspinDiscovery
 
         _LOGGER.info("Starting Sendspin server discovery...")
-        self._sendspin_discovery = SendspinDiscovery(self._on_sendspin_server_found)
+        self._sendspin_discovery = SendspinDiscovery(self._on_sendspin_server_found, self._on_sendspin_server_removed)
         await self._sendspin_discovery.start()
 
     async def _on_sendspin_server_found(self, server_url: str) -> None:
@@ -196,7 +197,15 @@ class AudioPlayer:
         Args:
             server_url: WebSocket URL of the discovered server.
         """
+        self._known_sendspin_servers.add(server_url)
         await self._connect_to_server(server_url)
+
+    async def _on_sendspin_server_removed(self, server_url: str) -> None:
+        """Disconnect when the active Sendspin server disappears."""
+        self._known_sendspin_servers.discard(server_url)
+        if self._sendspin_url == server_url:
+            _LOGGER.info("Active Sendspin server disappeared: %s", server_url)
+            await self._disconnect_sendspin()
 
     async def _connect_to_server(self, server_url: str) -> bool:
         """Connect to a discovered Sendspin server as PLAYER.
@@ -348,14 +357,12 @@ class AudioPlayer:
                     self._gstreamer_lock.release()
             else:
                 _LOGGER.debug("GStreamer lock busy, skipping audio sample")
-                # Flush SDK playback buffer to prevent buffer overflow during lock contention
-                try:
-                    if hasattr(self.reachy_mini.media, "flush"):
-                        self.reachy_mini.media.flush()
-                    elif hasattr(self.reachy_mini.media, "flush_audio"):
-                        self.reachy_mini.media.flush_audio()
-                except Exception:
-                    pass
+                audio_backend = getattr(self.reachy_mini.media, "audio", None)
+                if audio_backend is not None and hasattr(audio_backend, "clear_output_buffer"):
+                    try:
+                        audio_backend.clear_output_buffer()
+                    except Exception:
+                        pass
 
         except Exception as e:
             _LOGGER.debug("Error playing Sendspin audio: %s", e)
@@ -400,6 +407,7 @@ class AudioPlayer:
         self._sendspin_enabled = False
         self._sendspin_url = None
         self._sendspin_audio_format = None
+        self._sendspin_playback_started = False
 
     async def stop_sendspin(self) -> None:
         """Stop Sendspin discovery and disconnect from server."""
