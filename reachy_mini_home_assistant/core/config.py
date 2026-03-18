@@ -90,8 +90,7 @@ class CameraConfig:
     # JPEG encoding
     quality: int = 80
 
-    # Face tracking
-    face_tracking_enabled: bool = True
+    # Face tracking runtime tuning
     face_confidence_threshold: float = 0.5  # Min confidence for face detection (0.3 too low, causes false positives)
     face_lost_delay: float = 2.0  # Wait before returning to neutral
     interpolation_duration: float = 1.0  # Time to return to neutral
@@ -101,8 +100,7 @@ class CameraConfig:
     low_power_threshold: float = 5.0  # Seconds without face -> low power
     idle_threshold: float = 30.0  # Seconds without face -> idle
 
-    # Gesture detection
-    gesture_detection_enabled: bool = False
+    # Gesture detection runtime tuning
     gesture_detection_interval: int = 1  # Run every frame for responsive gestures
 
 
@@ -431,8 +429,11 @@ class Config:
                 "fps_low": cls.camera.fps_low,
                 "fps_idle": cls.camera.fps_idle,
                 "quality": cls.camera.quality,
-                "face_tracking_enabled": cls.camera.face_tracking_enabled,
-                "gesture_detection_enabled": cls.camera.gesture_detection_enabled,
+                "face_confidence_threshold": cls.camera.face_confidence_threshold,
+                "face_lost_delay": cls.camera.face_lost_delay,
+                "interpolation_duration": cls.camera.interpolation_duration,
+                "offset_scale": cls.camera.offset_scale,
+                "gesture_detection_interval": cls.camera.gesture_detection_interval,
             },
             "motion": {
                 "control_rate_hz": cls.motion.control_rate_hz,

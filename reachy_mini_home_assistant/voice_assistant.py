@@ -179,12 +179,11 @@ class VoiceAssistantService:
         # Set motion controller reference in state
         self._state.motion = self._motion
         if self._motion and self._motion.movement_manager:
-            self._motion.movement_manager.set_idle_motion_enabled(preferences.idle_motion_enabled)
-            self._motion.movement_manager.set_idle_antenna_enabled(preferences.idle_antenna_enabled)
-            self._motion.movement_manager.set_idle_random_actions_enabled(preferences.idle_random_actions_enabled)
-            _LOGGER.info("Idle motion restored from preferences: %s", preferences.idle_motion_enabled)
-            _LOGGER.info("Idle antenna motion restored from preferences: %s", preferences.idle_antenna_enabled)
-            _LOGGER.info("Idle random actions restored from preferences: %s", preferences.idle_random_actions_enabled)
+            idle_enabled = preferences.idle_behavior_enabled
+            self._motion.movement_manager.set_idle_motion_enabled(idle_enabled)
+            self._motion.movement_manager.set_idle_antenna_enabled(idle_enabled)
+            self._motion.movement_manager.set_idle_random_actions_enabled(idle_enabled)
+            _LOGGER.info("Idle behavior restored from preferences: %s", idle_enabled)
 
         # Set sleep/wake callbacks for HA button triggers
         self._state.on_ha_sleep = self._on_sleep
