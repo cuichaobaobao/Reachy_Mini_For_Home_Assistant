@@ -334,6 +334,7 @@ class MJPEGCameraServer:
 
         # Suspend frame rate manager
         self._frame_rate_manager.suspend()
+        # Disable runtime processing while preserving requested user preferences.
         self._face_tracking_enabled = False
         self._gesture_detection_enabled = False
 
