@@ -157,6 +157,26 @@ class EntityRegistry:
         self.camera_server.set_face_tracking_enabled(bool(prefs.face_tracking_enabled))
         self.camera_server.set_gesture_detection_enabled(bool(prefs.gesture_detection_enabled))
 
+    def _get_pref_bool(self, key: str, default: bool = False) -> bool:
+        prefs = self._get_preferences()
+        return bool(getattr(prefs, key, default)) if prefs is not None else default
+
+    def _set_pref_bool(self, key: str, enabled: bool) -> None:
+        prefs = self._get_preferences()
+        if prefs is not None:
+            setattr(prefs, key, bool(enabled))
+            self._save_preferences()
+
+    def _get_pref_float(self, key: str, default: float) -> float:
+        prefs = self._get_preferences()
+        return float(getattr(prefs, key, default)) if prefs is not None else default
+
+    def _set_pref_float(self, key: str, value: float) -> None:
+        prefs = self._get_preferences()
+        if prefs is not None:
+            setattr(prefs, key, float(value))
+            self._save_preferences()
+
     def _set_idle_behavior_enabled(self, enabled: bool) -> None:
         self.reachy_controller.set_idle_behavior_enabled(enabled)
 
@@ -192,6 +212,39 @@ class EntityRegistry:
             value_setter=setter,
         )
 
+    def _make_stored_switch(
+        self,
+        *,
+        key_name: str,
+        name: str,
+        object_id: str,
+        icon: str,
+        pref_key: str,
+        getter_transform: Callable[[bool], bool] | None = None,
+        setter_transform: Callable[[bool], bool] | None = None,
+        after_set: Callable[[], None] | None = None,
+    ) -> SwitchEntity:
+        """Create a switch backed by preferences with optional transforms/hooks."""
+
+        def getter() -> bool:
+            value = self._get_pref_bool(pref_key)
+            return getter_transform(value) if getter_transform is not None else value
+
+        def setter(enabled: bool) -> None:
+            stored = setter_transform(enabled) if setter_transform is not None else enabled
+            self._set_pref_bool(pref_key, stored)
+            if after_set is not None:
+                after_set()
+
+        return self._make_preference_switch(
+            key_name=key_name,
+            name=name,
+            object_id=object_id,
+            icon=icon,
+            getter=getter,
+            setter=setter,
+        )
+
     def _make_preference_number(
         self,
         *,
@@ -222,12 +275,24 @@ class EntityRegistry:
             value_setter=setter,
         )
 
-    def setup_all_entities(self, entities: list) -> None:
-        """Setup all entity phases.
+    def _append_defined_entities(
+        self,
+        entities: list,
+        definitions: list,
+        callback_map: dict[str, tuple[Callable, Callable] | Callable],
+    ) -> None:
+        """Bind callbacks to declarative definitions and append created entities."""
+        for definition in definitions:
+            callbacks = callback_map.get(definition.key_name)
+            if isinstance(callbacks, tuple):
+                definition.value_getter = callbacks[0]
+                definition.command_handler = callbacks[1]
+            elif callbacks is not None:
+                definition.value_getter = callbacks
+            entities.append(create_entity(self.server, definition))
 
-        Args:
-            entities: The list to append entities to
-        """
+    def setup_all_entities(self, entities: list) -> None:
+        """Setup all entity phases."""
         self._setup_phase1_entities(entities)
         self._setup_phase2_entities(entities)
         self._setup_phase3_entities(entities)
@@ -295,7 +360,6 @@ class EntityRegistry:
             )
         )
 
-        # Voice assistant mute switch - suspends only voice services when enabled
         def get_muted() -> bool:
             return self.server.state.is_muted if hasattr(self.server, "state") and self.server.state else False
 
@@ -322,7 +386,6 @@ class EntityRegistry:
             )
         )
 
-        # Camera disable switch - suspends camera processing when enabled
         def get_camera_disabled() -> bool:
             return (
                 not self.server.state.camera_enabled if hasattr(self.server, "state") and self.server.state else False
@@ -368,89 +431,54 @@ class EntityRegistry:
             )
         )
 
-        def get_sendspin_enabled() -> bool:
-            prefs = self._get_preferences()
-            return bool(getattr(prefs, "sendspin_enabled", False)) if prefs is not None else False
-
-        def set_sendspin_enabled(enabled: bool) -> None:
-            prefs = self._get_preferences()
-            if prefs is not None:
-                prefs.sendspin_enabled = enabled
-                self._save_preferences()
-
+        def sync_sendspin() -> None:
             voice_assistant = getattr(self.server, "_voice_assistant_service", None)
             if voice_assistant:
-                voice_assistant.set_sendspin_enabled(enabled)
+                voice_assistant.set_sendspin_enabled(self._get_pref_bool("sendspin_enabled"))
 
         entities.append(
-            self._make_preference_switch(
+            self._make_stored_switch(
                 key_name="sendspin_enabled",
                 name="Sendspin",
                 object_id="sendspin_enabled",
                 icon="mdi:speaker-wireless",
-                getter=get_sendspin_enabled,
-                setter=set_sendspin_enabled,
+                pref_key="sendspin_enabled",
+                after_set=sync_sendspin,
             )
         )
 
-        def get_face_tracking_enabled() -> bool:
-            prefs = self._get_preferences()
-            if prefs is None or not prefs.idle_behavior_enabled:
-                return False
-            return bool(prefs.face_tracking_enabled)
-
-        def set_face_tracking_enabled(enabled: bool) -> None:
-            prefs = self._get_preferences()
-            if prefs is not None:
-                prefs.face_tracking_enabled = bool(enabled and prefs.idle_behavior_enabled)
-                self._save_preferences()
-            self._apply_vision_runtime_state()
-
         entities.append(
-            self._make_preference_switch(
+            self._make_stored_switch(
                 key_name="face_tracking_enabled",
                 name="Face Tracking",
                 object_id="face_tracking_enabled",
                 icon="mdi:face-recognition",
-                getter=get_face_tracking_enabled,
-                setter=set_face_tracking_enabled,
+                pref_key="face_tracking_enabled",
+                getter_transform=lambda value: value and self._idle_behavior_allows_vision(),
+                setter_transform=lambda enabled: enabled and self._idle_behavior_allows_vision(),
+                after_set=self._apply_vision_runtime_state,
             )
         )
 
-        def get_gesture_detection_enabled() -> bool:
-            prefs = self._get_preferences()
-            if prefs is None or not prefs.idle_behavior_enabled:
-                return False
-            return bool(prefs.gesture_detection_enabled)
-
-        def set_gesture_detection_enabled(enabled: bool) -> None:
-            prefs = self._get_preferences()
-            if prefs is not None:
-                prefs.gesture_detection_enabled = bool(enabled and prefs.idle_behavior_enabled)
-                self._save_preferences()
-            self._apply_vision_runtime_state()
-
         entities.append(
-            self._make_preference_switch(
+            self._make_stored_switch(
                 key_name="gesture_detection_enabled",
                 name="Gesture Detection",
                 object_id="gesture_detection_enabled",
                 icon="mdi:hand-wave",
-                getter=get_gesture_detection_enabled,
-                setter=set_gesture_detection_enabled,
+                pref_key="gesture_detection_enabled",
+                getter_transform=lambda value: value and self._idle_behavior_allows_vision(),
+                setter_transform=lambda enabled: enabled and self._idle_behavior_allows_vision(),
+                after_set=self._apply_vision_runtime_state,
             )
         )
 
         def get_face_confidence_threshold() -> float:
-            prefs = self._get_preferences()
-            return float(prefs.face_confidence_threshold) if prefs is not None else 0.5
+            return self._get_pref_float("face_confidence_threshold", 0.5)
 
         def set_face_confidence_threshold(value: float) -> None:
             value = max(0.0, min(1.0, float(value)))
-            prefs = self._get_preferences()
-            if prefs is not None:
-                prefs.face_confidence_threshold = value
-                self._save_preferences()
+            self._set_pref_float("face_confidence_threshold", value)
             if self.camera_server is not None:
                 self.camera_server.set_face_confidence_threshold(value)
 
@@ -503,8 +531,6 @@ class EntityRegistry:
             )
         )
 
-        # Sleep mode sensor - reflects daemon state (STOPPED = sleeping)
-        # This is read-only and updated by the SleepManager
         self._sleep_mode_entity = BinarySensorEntity(
             server=self.server,
             key=get_entity_key("sleep_mode"),
@@ -515,7 +541,6 @@ class EntityRegistry:
         )
         entities.append(self._sleep_mode_entity)
 
-        # Services suspended sensor - shows if ML models are unloaded
         self._services_suspended_entity = BinarySensorEntity(
             server=self.server,
             key=get_entity_key("services_suspended"),
@@ -532,7 +557,6 @@ class EntityRegistry:
         """Setup Phase 3 entities: Pose control."""
         rc = self.reachy_controller
 
-        # Map definitions to actual getter/setter pairs
         callback_map = {
             "head_x": (rc.get_head_x, rc.set_head_x),
             "head_y": (rc.get_head_y, rc.set_head_y),
@@ -545,13 +569,7 @@ class EntityRegistry:
             "antenna_right": (rc.get_antenna_right, rc.set_antenna_right),
         }
 
-        definitions = get_pose_control_definitions()
-        for defn in definitions:
-            callbacks = callback_map.get(defn.key_name)
-            if callbacks:
-                defn.value_getter = callbacks[0]
-                defn.command_handler = callbacks[1]
-            entities.append(create_entity(self.server, defn))
+        self._append_defined_entities(entities, get_pose_control_definitions(), callback_map)
 
         _LOGGER.debug("Phase 3 entities registered: head position/orientation, body_yaw, antennas")
 
@@ -559,20 +577,13 @@ class EntityRegistry:
         """Setup Phase 4 entities: Look at control."""
         rc = self.reachy_controller
 
-        # Map definitions to actual getter/setter pairs
         callback_map = {
             "look_at_x": (rc.get_look_at_x, rc.set_look_at_x),
             "look_at_y": (rc.get_look_at_y, rc.set_look_at_y),
             "look_at_z": (rc.get_look_at_z, rc.set_look_at_z),
         }
 
-        definitions = get_look_at_definitions()
-        for defn in definitions:
-            callbacks = callback_map.get(defn.key_name)
-            if callbacks:
-                defn.value_getter = callbacks[0]
-                defn.command_handler = callbacks[1]
-            entities.append(create_entity(self.server, defn))
+        self._append_defined_entities(entities, get_look_at_definitions(), callback_map)
 
         _LOGGER.debug("Phase 4 entities registered: look_at_x/y/z")
 
@@ -606,15 +617,12 @@ class EntityRegistry:
             )
         )
 
-        # DOA sound tracking control switch
         def get_doa_tracking_state() -> bool:
-            """Get current DOA tracking state."""
             if rc._movement_manager is not None:
                 return rc._movement_manager._doa_enabled
             return True
 
         def set_doa_tracking_state(enabled: bool) -> None:
-            """Set DOA tracking state."""
             if rc._movement_manager is not None:
                 rc._movement_manager.set_doa_enabled(enabled)
             _LOGGER.info("DOA tracking %s", "enabled" if enabled else "disabled")
@@ -637,7 +645,6 @@ class EntityRegistry:
         """Setup Phase 6 entities: Diagnostic information."""
         rc = self.reachy_controller
 
-        # Map definitions to actual value getters
         getter_map = {
             "control_loop_frequency": rc.get_control_loop_frequency,
             "sdk_version": rc.get_sdk_version,
@@ -649,9 +656,7 @@ class EntityRegistry:
         }
 
         definitions = get_robot_info_definitions()
-        for defn in definitions:
-            defn.value_getter = getter_map.get(defn.key_name)
-            entities.append(create_entity(self.server, defn))
+        self._append_defined_entities(entities, definitions, getter_map)
 
         _LOGGER.debug(
             "Phase 6 entities registered: control_loop_frequency, sdk_version, "
@@ -662,7 +667,6 @@ class EntityRegistry:
         """Setup Phase 7 entities: IMU sensors (wireless only)."""
         rc = self.reachy_controller
 
-        # Map definitions to actual value getters
         getter_map = {
             "imu_accel_x": rc.get_imu_accel_x,
             "imu_accel_y": rc.get_imu_accel_y,
@@ -673,10 +677,7 @@ class EntityRegistry:
             "imu_temperature": rc.get_imu_temperature,
         }
 
-        definitions = get_imu_sensor_definitions()
-        for defn in definitions:
-            defn.value_getter = getter_map.get(defn.key_name)
-            entities.append(create_entity(self.server, defn))
+        self._append_defined_entities(entities, get_imu_sensor_definitions(), getter_map)
 
         _LOGGER.debug("Phase 7 entities registered: IMU accelerometer, gyroscope, temperature")
 
@@ -1022,12 +1023,9 @@ class EntityRegistry:
 
         These sensors provide system health information for the robot's
         computer, useful for monitoring resource usage and debugging.
-
-        Uses entity factory for declarative entity creation.
         """
         diag = get_system_diagnostics()
 
-        # Get definitions from factory and bind value getters
         definitions = get_diagnostic_sensor_definitions()
         getter_map = {
             "sys_cpu_percent": diag.get_cpu_percent,
@@ -1041,8 +1039,6 @@ class EntityRegistry:
             "sys_process_memory": diag.get_process_memory_mb,
         }
 
-        for defn in definitions:
-            defn.value_getter = getter_map.get(defn.key_name)
-            entities.append(create_entity(self.server, defn))
+        self._append_defined_entities(entities, definitions, getter_map)
 
         _LOGGER.debug("Phase 24 entities registered: %d diagnostic sensors", len(definitions))
