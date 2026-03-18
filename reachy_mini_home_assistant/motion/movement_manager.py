@@ -469,6 +469,24 @@ class MovementManager:
             target_x=0.0,
             target_y=0.0,
             target_z=0.0,
+            target_antenna_left=0.0,
+            target_antenna_right=0.0,
+            duration=duration,
+        )
+        self._command_queue.put(("action", action))
+
+    def transition_to_idle_rest(self, duration: float = 2.0) -> None:
+        """Thread-safe: Smoothly move into the configured idle rest pose."""
+        action = PendingAction(
+            name="idle_rest",
+            target_pitch=self._idle_rest_head_pitch_rad,
+            target_yaw=0.0,
+            target_roll=0.0,
+            target_x=0.0,
+            target_y=0.0,
+            target_z=0.0,
+            target_antenna_left=self._idle_rest_antenna_left_rad,
+            target_antenna_right=self._idle_rest_antenna_right_rad,
             duration=duration,
         )
         self._command_queue.put(("action", action))
@@ -862,8 +880,6 @@ class MovementManager:
                 # Reset idle antenna smoothing state
                 self._idle_antenna_smoothed = None
                 self._last_idle_antenna_update = 0.0
-                if not self._idle_behavior_enabled():
-                    self._apply_idle_rest_pose()
 
             if payload != RobotState.IDLE:
                 self.state.target_pitch = 0.0
@@ -1015,6 +1031,8 @@ class MovementManager:
             "x": self.state.target_x,
             "y": self.state.target_y,
             "z": self.state.target_z,
+            "antenna_left": self.state.target_antenna_left,
+            "antenna_right": self.state.target_antenna_right,
         }
         logger.debug("Starting action: %s", action.name)
 
@@ -1074,6 +1092,12 @@ class MovementManager:
         self.state.target_x = start["x"] + t * (action.target_x - start["x"])
         self.state.target_y = start["y"] + t * (action.target_y - start["y"])
         self.state.target_z = start["z"] + t * (action.target_z - start["z"])
+        self.state.target_antenna_left = start["antenna_left"] + t * (
+            action.target_antenna_left - start["antenna_left"]
+        )
+        self.state.target_antenna_right = start["antenna_right"] + t * (
+            action.target_antenna_right - start["antenna_right"]
+        )
 
         # Action complete
         if progress >= 1.0:
@@ -1140,7 +1164,7 @@ class MovementManager:
         self.state.anim_x = offsets["x"] * idle_animation_scale
         self.state.anim_y = offsets["y"] * idle_animation_scale
         self.state.anim_z = offsets["z"] * idle_animation_scale
-        if self._idle_antenna_enabled:
+        if self.state.robot_state != RobotState.IDLE or self._idle_antenna_enabled:
             self.state.anim_antenna_left = offsets["antenna_left"] * idle_animation_scale
             self.state.anim_antenna_right = offsets["antenna_right"] * idle_animation_scale
         else:
