@@ -654,6 +654,9 @@ class VoiceSatelliteProtocol(APIServer):
         """Apply face tracking state consistently across conversation transitions."""
         if self.camera_server is None:
             return
+        prefs = getattr(self.state, "preferences", None)
+        if prefs is not None and not bool(getattr(prefs, "idle_behavior_enabled", False)):
+            enabled = False
         try:
             self.camera_server.set_face_tracking_enabled(enabled)
             _LOGGER.debug("Face tracking %s during %s", "enabled" if enabled else "paused", context)

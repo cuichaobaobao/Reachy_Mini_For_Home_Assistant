@@ -135,13 +135,40 @@ class EntityRegistry:
         if state is not None:
             state.save_preferences()
 
+    def _idle_behavior_allows_vision(self) -> bool:
+        prefs = self._get_preferences()
+        return bool(prefs.idle_behavior_enabled) if prefs is not None else False
+
+    def _apply_vision_runtime_state(self) -> None:
+        if self.camera_server is None:
+            return
+
+        prefs = self._get_preferences()
+        if prefs is None:
+            self.camera_server.set_face_tracking_enabled(False)
+            self.camera_server.set_gesture_detection_enabled(False)
+            return
+
+        if not prefs.idle_behavior_enabled:
+            self.camera_server.set_face_tracking_enabled(False)
+            self.camera_server.set_gesture_detection_enabled(False)
+            return
+
+        self.camera_server.set_face_tracking_enabled(bool(prefs.face_tracking_enabled))
+        self.camera_server.set_gesture_detection_enabled(bool(prefs.gesture_detection_enabled))
+
     def _set_idle_behavior_enabled(self, enabled: bool) -> None:
         self.reachy_controller.set_idle_behavior_enabled(enabled)
 
         prefs = self._get_preferences()
         if prefs is not None:
             prefs.set_idle_behavior_enabled(enabled)
+            if not enabled:
+                prefs.face_tracking_enabled = False
+                prefs.gesture_detection_enabled = False
             self._save_preferences()
+
+        self._apply_vision_runtime_state()
 
     def _make_preference_switch(
         self,
@@ -368,15 +395,16 @@ class EntityRegistry:
 
         def get_face_tracking_enabled() -> bool:
             prefs = self._get_preferences()
-            return bool(prefs.face_tracking_enabled) if prefs is not None else False
+            if prefs is None or not prefs.idle_behavior_enabled:
+                return False
+            return bool(prefs.face_tracking_enabled)
 
         def set_face_tracking_enabled(enabled: bool) -> None:
             prefs = self._get_preferences()
             if prefs is not None:
-                prefs.face_tracking_enabled = enabled
+                prefs.face_tracking_enabled = bool(enabled and prefs.idle_behavior_enabled)
                 self._save_preferences()
-            if self.camera_server is not None:
-                self.camera_server.set_face_tracking_enabled(enabled)
+            self._apply_vision_runtime_state()
 
         entities.append(
             self._make_preference_switch(
@@ -391,15 +419,16 @@ class EntityRegistry:
 
         def get_gesture_detection_enabled() -> bool:
             prefs = self._get_preferences()
-            return bool(prefs.gesture_detection_enabled) if prefs is not None else False
+            if prefs is None or not prefs.idle_behavior_enabled:
+                return False
+            return bool(prefs.gesture_detection_enabled)
 
         def set_gesture_detection_enabled(enabled: bool) -> None:
             prefs = self._get_preferences()
             if prefs is not None:
-                prefs.gesture_detection_enabled = enabled
+                prefs.gesture_detection_enabled = bool(enabled and prefs.idle_behavior_enabled)
                 self._save_preferences()
-            if self.camera_server is not None:
-                self.camera_server.set_gesture_detection_enabled(enabled)
+            self._apply_vision_runtime_state()
 
         entities.append(
             self._make_preference_switch(
