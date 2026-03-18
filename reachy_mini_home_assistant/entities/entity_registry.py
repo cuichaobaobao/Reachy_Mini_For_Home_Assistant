@@ -130,6 +130,9 @@ class EntityRegistry:
         state = getattr(self.server, "state", None)
         return state.preferences if state is not None else None
 
+    def _get_server_state(self):
+        return getattr(self.server, "state", None)
+
     def _save_preferences(self) -> None:
         state = getattr(self.server, "state", None)
         if state is not None:
@@ -361,17 +364,20 @@ class EntityRegistry:
         )
 
         def get_muted() -> bool:
-            return self.server.state.is_muted if hasattr(self.server, "state") and self.server.state else False
+            state = self._get_server_state()
+            return bool(state.is_muted) if state is not None else False
 
         def set_muted(muted: bool) -> None:
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.is_muted = muted
-                voice_assistant = getattr(self.server, "_voice_assistant_service", None)
-                if voice_assistant:
-                    if muted:
-                        voice_assistant._suspend_voice_services(reason="mute")
-                    else:
-                        voice_assistant._resume_voice_services(reason="mute")
+            state = self._get_server_state()
+            if state is None:
+                return
+            state.is_muted = muted
+            voice_assistant = getattr(self.server, "_voice_assistant_service", None)
+            if voice_assistant:
+                if muted:
+                    voice_assistant._suspend_voice_services(reason="mute")
+                else:
+                    voice_assistant._resume_voice_services(reason="mute")
 
         entities.append(
             SwitchEntity(
@@ -387,18 +393,19 @@ class EntityRegistry:
         )
 
         def get_camera_disabled() -> bool:
-            return (
-                not self.server.state.camera_enabled if hasattr(self.server, "state") and self.server.state else False
-            )
+            state = self._get_server_state()
+            return not state.camera_enabled if state is not None else False
 
         def set_camera_disabled(disabled: bool) -> None:
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.camera_enabled = not disabled
-                if self.camera_server:
-                    if disabled:
-                        self.camera_server.suspend()
-                    else:
-                        self.camera_server.resume_from_suspend()
+            state = self._get_server_state()
+            if state is None:
+                return
+            state.camera_enabled = not disabled
+            if self.camera_server:
+                if disabled:
+                    self.camera_server.suspend()
+                else:
+                    self.camera_server.resume_from_suspend()
 
         entities.append(
             SwitchEntity(

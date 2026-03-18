@@ -538,11 +538,10 @@ class VoiceSatelliteProtocol(APIServer):
     def on_authenticated(self) -> None:
         """Replay current entity states after ESPHome authentication."""
         for entity in self.state.entities:
-            if hasattr(entity, "update_state"):
-                try:
-                    entity.update_state()
-                except Exception as e:
-                    _LOGGER.debug("Failed to replay state for %s: %s", getattr(entity, "object_id", entity), e)
+            try:
+                entity.update_state()
+            except Exception as e:
+                _LOGGER.debug("Failed to replay state for %s: %s", getattr(entity, "object_id", entity), e)
 
     def stop(self) -> None:
         """Stop current TTS playback (e.g., user said stop word)."""
@@ -688,8 +687,7 @@ class VoiceSatelliteProtocol(APIServer):
     def _set_stop_word_active(self, active: bool) -> None:
         """Toggle stop word detector when model supports runtime activation."""
         try:
-            if hasattr(self.state.stop_word, "is_active"):
-                self.state.stop_word.is_active = active
+            self.state.stop_word.is_active = active
         except Exception:
             pass
 
@@ -948,8 +946,7 @@ class VoiceSatelliteProtocol(APIServer):
             # The wake word detected event triggers the voice pipeline
             _LOGGER.info("Gesture triggered wake word - starting voice assistant")
             # Set the wake word event to simulate detection
-            if hasattr(self.state, "last_wake_word"):
-                self.state.last_wake_word = "gesture"
+            self.state.last_wake_word = "gesture"
             # Trigger the run_voice_assistant logic
             self.start_voice_assistant()
         except Exception as e:

@@ -99,73 +99,61 @@ class ReachyController:
         """Check if robot is available."""
         return self.reachy is not None
 
-    def get_idle_motion_enabled(self) -> bool:
-        """Get whether idle look-around behavior is enabled."""
+    def _with_movement_manager(self, caller: str):
         if self._movement_manager is None:
+            logger.warning("%s failed - MovementManager not set", caller)
+            return None
+        return self._movement_manager
+
+    def _get_movement_bool(self, getter_name: str, log_label: str) -> bool:
+        movement_manager = self._movement_manager
+        if movement_manager is None:
             return False
         try:
-            return bool(self._movement_manager.get_idle_motion_enabled())
+            return bool(getattr(movement_manager, getter_name)())
         except Exception as e:
-            logger.debug("Error getting idle motion state: %s", e)
+            logger.debug("Error getting %s state: %s", log_label, e)
             return False
+
+    def get_idle_motion_enabled(self) -> bool:
+        """Get whether idle look-around behavior is enabled."""
+        return self._get_movement_bool("get_idle_motion_enabled", "idle motion")
 
     def get_idle_behavior_enabled(self) -> bool:
         """Get whether any idle behavior subsystem is enabled."""
-        if self._movement_manager is None:
-            return False
-        try:
-            return bool(self._movement_manager.get_idle_behavior_enabled())
-        except Exception as e:
-            logger.debug("Error getting idle behavior state: %s", e)
-            return False
+        return self._get_movement_bool("get_idle_behavior_enabled", "idle behavior")
 
     def set_idle_behavior_enabled(self, enabled: bool) -> None:
         """Enable or disable all idle behavior subsystems together."""
-        if self._movement_manager is None:
-            logger.warning("set_idle_behavior_enabled failed - MovementManager not set")
-            return
-        self._movement_manager.set_idle_behavior_enabled(enabled)
+        movement_manager = self._with_movement_manager("set_idle_behavior_enabled")
+        if movement_manager is not None:
+            movement_manager.set_idle_behavior_enabled(enabled)
 
     def set_idle_motion_enabled(self, enabled: bool) -> None:
         """Enable or disable idle look-around behavior."""
-        if self._movement_manager is None:
-            logger.warning("set_idle_motion_enabled failed - MovementManager not set")
-            return
-        self._movement_manager.set_idle_motion_enabled(enabled)
+        movement_manager = self._with_movement_manager("set_idle_motion_enabled")
+        if movement_manager is not None:
+            movement_manager.set_idle_motion_enabled(enabled)
 
     def get_idle_antenna_enabled(self) -> bool:
         """Get whether idle antenna animation is enabled."""
-        if self._movement_manager is None:
-            return False
-        try:
-            return bool(self._movement_manager.get_idle_antenna_enabled())
-        except Exception as e:
-            logger.debug("Error getting idle antenna state: %s", e)
-            return False
+        return self._get_movement_bool("get_idle_antenna_enabled", "idle antenna")
 
     def set_idle_antenna_enabled(self, enabled: bool) -> None:
         """Enable or disable idle antenna animation."""
-        if self._movement_manager is None:
-            logger.warning("set_idle_antenna_enabled failed - MovementManager not set")
-            return
-        self._movement_manager.set_idle_antenna_enabled(enabled)
+        movement_manager = self._with_movement_manager("set_idle_antenna_enabled")
+        if movement_manager is not None:
+            movement_manager.set_idle_antenna_enabled(enabled)
 
     def get_idle_random_actions_enabled(self) -> bool:
         """Get whether idle random actions are enabled."""
-        if self._movement_manager is None:
-            return False
-        try:
-            return bool(self._movement_manager.get_idle_random_actions_enabled())
-        except Exception as e:
-            logger.debug("Error getting idle random actions state: %s", e)
-            return False
+        return self._get_movement_bool("get_idle_random_actions_enabled", "idle random actions")
 
     def set_idle_random_actions_enabled(self, enabled: bool) -> None:
         """Enable or disable idle random actions (no audio)."""
-        if self._movement_manager is None:
-            logger.warning("set_idle_random_actions_enabled failed - MovementManager not set")
-            return
-        self._movement_manager.set_idle_random_actions_enabled(enabled)
+        movement_manager = self._with_movement_manager("set_idle_random_actions_enabled")
+        if movement_manager is not None:
+            movement_manager.set_idle_random_actions_enabled(enabled)
 
     # ========== Phase 1: Basic Status & Volume ==========
 
