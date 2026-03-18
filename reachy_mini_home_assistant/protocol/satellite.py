@@ -5,6 +5,7 @@ import logging
 import math
 import posixpath
 import shutil
+import threading
 import time
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Optional
@@ -63,6 +64,7 @@ from ..reachy_controller import ReachyController
 from .api_server import APIServer
 
 _LOGGER = logging.getLogger(__name__)
+IDLE_RETURN_DELAY_S = 10.0
 
 
 class VoiceSatelliteProtocol(APIServer):
@@ -97,6 +99,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Track Home Assistant entity states for change detection
         self._ha_entity_states: dict[str, str] = {}
+        self._idle_return_timer: Optional[threading.Timer] = None
 
         # Initialize Reachy controller
         self.reachy_controller = ReachyController(state.reachy_mini)
@@ -614,8 +617,27 @@ class VoiceSatelliteProtocol(APIServer):
             self._is_streaming_audio = False
             _LOGGER.debug("Conversation finished")
 
-            # Reachy Mini: Return to idle
+            # Reachy Mini: Return to idle after a short delay.
+            self._schedule_delayed_idle_return()
+
+    def _cancel_delayed_idle_return(self) -> None:
+        """Cancel any pending delayed transition to idle."""
+        if self._idle_return_timer is not None:
+            self._idle_return_timer.cancel()
+            self._idle_return_timer = None
+
+    def _schedule_delayed_idle_return(self) -> None:
+        """Schedule delayed idle transition after conversation end."""
+        self._cancel_delayed_idle_return()
+
+        def _go_idle() -> None:
+            self._idle_return_timer = None
             self._reachy_on_idle()
+
+        self._idle_return_timer = threading.Timer(IDLE_RETURN_DELAY_S, _go_idle)
+        self._idle_return_timer.daemon = True
+        self._idle_return_timer.start()
+        _LOGGER.debug("Scheduled idle transition in %.1fs", IDLE_RETURN_DELAY_S)
 
     def _set_stop_word_active(self, active: bool) -> None:
         """Toggle stop word detector when model supports runtime activation."""
@@ -638,6 +660,7 @@ class VoiceSatelliteProtocol(APIServer):
     def connection_lost(self, exc):
         super().connection_lost(exc)
         _LOGGER.info("Disconnected from Home Assistant")
+        self._cancel_delayed_idle_return()
         # Clear streaming state on disconnect
         self._is_streaming_audio = False
         self._tts_url = None
@@ -793,6 +816,7 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_listening(self) -> None:
         """Called when listening for speech (HA state: Listening)."""
+        self._cancel_delayed_idle_return()
         # Enable high-frequency face tracking during listening
         self._set_conversation_mode(True)
 
@@ -814,6 +838,7 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_thinking(self) -> None:
         """Called when processing speech (HA state: Processing)."""
+        self._cancel_delayed_idle_return()
         # Resume face tracking (may have been paused during speaking)
         if self.camera_server is not None:
             try:
@@ -832,6 +857,7 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_speaking(self) -> None:
         """Called when TTS is playing (HA state: Responding)."""
+        self._cancel_delayed_idle_return()
         # Pause face tracking during speaking - robot will use speaking animation instead
         if self.camera_server is not None:
             try:
@@ -1019,6 +1045,7 @@ class VoiceSatelliteProtocol(APIServer):
         Stops any current playback and releases resources.
         """
         _LOGGER.info("Suspending VoiceSatellite for sleep...")
+        self._cancel_delayed_idle_return()
 
         # Stop any current TTS/music
         if self.state.tts_player:

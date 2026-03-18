@@ -81,6 +81,8 @@ IDLE_LOOK_AROUND_PITCH_RANGE = 6.0  # Maximum pitch angle in degrees
 IDLE_LOOK_AROUND_DURATION = 2.0  # Duration of look-around action in seconds
 IDLE_INACTIVITY_THRESHOLD = 6.0  # Seconds of inactivity before look-around starts
 IDLE_LOOK_AROUND_PROBABILITY = 0.8  # Otherwise keep breathing-only cycle
+IDLE_REST_HEAD_PITCH_DEG = 12.0  # Tired idle pose when idle behavior is disabled
+IDLE_REST_ANTENNA_RAD = -0.35  # Lower antenna pose in tired idle
 
 _ANIMATION_CONFIG_FILE = Path(__file__).resolve().parent.parent / "animations" / "conversation_animations.json"
 _DEFAULT_IDLE_RANDOM_ACTIONS: list[dict[str, Any]] = [
@@ -226,6 +228,8 @@ class MovementManager:
         self._idle_antenna_enabled = False
         # Idle random actions toggle (pure movement, no audio)
         self._idle_random_actions_enabled = False
+        self._idle_rest_head_pitch_rad = math.radians(IDLE_REST_HEAD_PITCH_DEG)
+        self._idle_rest_antenna_rad = IDLE_REST_ANTENNA_RAD
         self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
         self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
         self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
@@ -521,6 +525,21 @@ class MovementManager:
         except Exception:
             logger.warning("Command queue full, dropping set_idle_random_actions command")
 
+    def _idle_behavior_enabled(self) -> bool:
+        """Whether any idle behavior subsystem is currently enabled."""
+        return self._idle_motion_enabled or self._idle_antenna_enabled or self._idle_random_actions_enabled
+
+    def _apply_idle_rest_pose(self) -> None:
+        """Apply a low-energy idle pose when idle behavior is disabled."""
+        self.state.target_pitch = self._idle_rest_head_pitch_rad
+        self.state.target_yaw = 0.0
+        self.state.target_roll = 0.0
+        self.state.target_x = 0.0
+        self.state.target_y = 0.0
+        self.state.target_z = 0.0
+        self.state.target_antenna_left = self._idle_rest_antenna_rad
+        self.state.target_antenna_right = self._idle_rest_antenna_rad
+
     def update_doa(self, angle_deg: float, energy: float) -> bool:
         """Update DOA tracker with new sound direction data.
 
@@ -656,6 +675,8 @@ class MovementManager:
     def _load_idle_random_actions_config(self) -> None:
         """Load idle random action definitions from animation config."""
         self._idle_random_actions = list(_DEFAULT_IDLE_RANDOM_ACTIONS)
+        self._idle_rest_head_pitch_rad = math.radians(IDLE_REST_HEAD_PITCH_DEG)
+        self._idle_rest_antenna_rad = IDLE_REST_ANTENNA_RAD
         self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
         self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
         self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
@@ -670,6 +691,19 @@ class MovementManager:
         except Exception as e:
             logger.warning("Failed to read idle random actions config: %s", e)
             return
+
+        rest_pose = config.get("idle_rest_pose")
+        if isinstance(rest_pose, dict):
+            try:
+                self._idle_rest_head_pitch_rad = math.radians(
+                    float(rest_pose.get("pitch_deg", IDLE_REST_HEAD_PITCH_DEG))
+                )
+            except (TypeError, ValueError):
+                self._idle_rest_head_pitch_rad = math.radians(IDLE_REST_HEAD_PITCH_DEG)
+            try:
+                self._idle_rest_antenna_rad = float(rest_pose.get("antenna_rad", IDLE_REST_ANTENNA_RAD))
+            except (TypeError, ValueError):
+                self._idle_rest_antenna_rad = IDLE_REST_ANTENNA_RAD
 
         section = config.get("idle_random_actions")
         if not isinstance(section, dict):
@@ -775,7 +809,7 @@ class MovementManager:
             self.state.last_activity_time = self._now()
 
             # Update animation based on state
-            if payload == RobotState.IDLE and not self._idle_motion_enabled:
+            if payload == RobotState.IDLE and not self._idle_behavior_enabled():
                 animation_name = "none"
                 self._animation_player.stop()
             else:
@@ -790,6 +824,8 @@ class MovementManager:
                 # Reset idle antenna smoothing state
                 self._idle_antenna_smoothed = None
                 self._last_idle_antenna_update = 0.0
+                if not self._idle_behavior_enabled():
+                    self._apply_idle_rest_pose()
 
             # Freeze antennas when entering listening mode
             if payload == RobotState.LISTENING:
@@ -799,6 +835,14 @@ class MovementManager:
                 self._start_antenna_unfreeze()
 
             if payload != RobotState.IDLE:
+                self.state.target_pitch = 0.0
+                self.state.target_yaw = 0.0
+                self.state.target_roll = 0.0
+                self.state.target_x = 0.0
+                self.state.target_y = 0.0
+                self.state.target_z = 0.0
+                self.state.target_antenna_left = 0.0
+                self.state.target_antenna_right = 0.0
                 self._idle_antenna_smoothed = None
                 self._last_idle_antenna_update = 0.0
 
@@ -854,7 +898,7 @@ class MovementManager:
             enabled = bool(payload)
             self._idle_motion_enabled = enabled
             if not enabled:
-                if not self._idle_random_actions_enabled:
+                if not self._idle_behavior_enabled():
                     self.state.next_look_around_time = 0.0
                     self.state.look_around_in_progress = False
                     self._idle_action_queue.clear()
@@ -870,20 +914,27 @@ class MovementManager:
                     self.state.anim_z = 0.0
                     self.state.anim_antenna_left = 0.0
                     self.state.anim_antenna_right = 0.0
+                    if not self._idle_behavior_enabled():
+                        self._apply_idle_rest_pose()
             elif self.state.robot_state == RobotState.IDLE:
                 self._animation_player.set_animation("idle")
+                self.state.target_pitch = 0.0
+                self.state.target_antenna_left = 0.0
+                self.state.target_antenna_right = 0.0
             logger.info("Idle motion %s", "enabled" if enabled else "disabled")
 
         elif cmd == "set_idle_random_actions":
             enabled = bool(payload)
             self._idle_random_actions_enabled = enabled
             if not enabled:
-                if not self._idle_motion_enabled:
+                if not self._idle_behavior_enabled():
                     self.state.next_look_around_time = 0.0
                     self.state.look_around_in_progress = False
                 self._idle_action_queue.clear()
                 if self._pending_action and self._pending_action.name.startswith("idle_action"):
                     self._pending_action = None
+                if self.state.robot_state == RobotState.IDLE and not self._idle_behavior_enabled():
+                    self._apply_idle_rest_pose()
             logger.info("Idle random actions %s", "enabled" if enabled else "disabled")
 
         elif cmd == "set_idle_antenna":
@@ -895,6 +946,11 @@ class MovementManager:
                 self.state.anim_antenna_right = 0.0
                 self._idle_antenna_smoothed = None
                 self._last_idle_antenna_update = 0.0
+                if self.state.robot_state == RobotState.IDLE and not self._idle_behavior_enabled():
+                    self._apply_idle_rest_pose()
+            elif self.state.robot_state == RobotState.IDLE:
+                self.state.target_antenna_left = 0.0
+                self.state.target_antenna_right = 0.0
 
             logger.info("Idle antenna animation %s", "enabled" if enabled else "disabled")
 
