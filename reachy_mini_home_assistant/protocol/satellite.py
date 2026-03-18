@@ -639,6 +639,38 @@ class VoiceSatelliteProtocol(APIServer):
         self._idle_return_timer.start()
         _LOGGER.debug("Scheduled idle transition in %.1fs", IDLE_RETURN_DELAY_S)
 
+    def _set_face_tracking_for_state(self, enabled: bool, context: str) -> None:
+        """Apply face tracking state consistently across conversation transitions."""
+        if self.camera_server is None:
+            return
+        try:
+            self.camera_server.set_face_tracking_enabled(enabled)
+            _LOGGER.debug("Face tracking %s during %s", "enabled" if enabled else "paused", context)
+        except Exception as e:
+            _LOGGER.debug("Failed to update face tracking during %s: %s", context, e)
+
+    def _run_motion_state(self, context: str, callback_name: str) -> None:
+        """Invoke a motion state callback when motion is available."""
+        if not self.state.motion_enabled:
+            if context == "speaking":
+                _LOGGER.warning("Motion disabled, skipping speaking animation")
+            return
+
+        if context in {"thinking", "idle"} and not self.state.reachy_mini:
+            return
+
+        motion = self.state.motion
+        if motion is None:
+            if context == "speaking":
+                _LOGGER.warning("No motion controller, skipping speaking animation")
+            return
+
+        try:
+            _LOGGER.debug("Reachy Mini: %s animation", context.capitalize())
+            getattr(motion, callback_name)()
+        except Exception as e:
+            _LOGGER.error("Reachy Mini motion error: %s", e)
+
     def _set_stop_word_active(self, active: bool) -> None:
         """Toggle stop word detector when model supports runtime activation."""
         try:
@@ -819,86 +851,27 @@ class VoiceSatelliteProtocol(APIServer):
         self._cancel_delayed_idle_return()
         # Enable high-frequency face tracking during listening
         self._set_conversation_mode(True)
-
-        # Resume face tracking (may have been paused during speaking)
-        if self.camera_server is not None:
-            try:
-                self.camera_server.set_face_tracking_enabled(True)
-            except Exception as e:
-                _LOGGER.debug("Failed to resume face tracking: %s", e)
-
-        if not self.state.motion_enabled:
-            return
-        try:
-            _LOGGER.debug("Reachy Mini: Listening animation")
-            if self.state.motion:
-                self.state.motion.on_listening()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        self._set_face_tracking_for_state(True, "listening")
+        self._run_motion_state("listening", "on_listening")
 
     def _reachy_on_thinking(self) -> None:
         """Called when processing speech (HA state: Processing)."""
         self._cancel_delayed_idle_return()
-        # Resume face tracking (may have been paused during speaking)
-        if self.camera_server is not None:
-            try:
-                self.camera_server.set_face_tracking_enabled(True)
-            except Exception as e:
-                _LOGGER.debug("Failed to resume face tracking: %s", e)
-
-        if not self.state.motion_enabled or not self.state.reachy_mini:
-            return
-        try:
-            _LOGGER.debug("Reachy Mini: Thinking animation")
-            if self.state.motion:
-                self.state.motion.on_thinking()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        self._set_face_tracking_for_state(True, "thinking")
+        self._run_motion_state("thinking", "on_thinking")
 
     def _reachy_on_speaking(self) -> None:
         """Called when TTS is playing (HA state: Responding)."""
         self._cancel_delayed_idle_return()
-        # Pause face tracking during speaking - robot will use speaking animation instead
-        if self.camera_server is not None:
-            try:
-                self.camera_server.set_face_tracking_enabled(False)
-                _LOGGER.debug("Face tracking paused during speaking")
-            except Exception as e:
-                _LOGGER.debug("Failed to pause face tracking: %s", e)
-
-        if not self.state.motion_enabled:
-            _LOGGER.warning("Motion disabled, skipping speaking animation")
-            return
-        if not self.state.motion:
-            _LOGGER.warning("No motion controller, skipping speaking animation")
-            return
-
-        try:
-            _LOGGER.debug("Reachy Mini: Starting speaking animation")
-            self.state.motion.on_speaking_start()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        self._set_face_tracking_for_state(False, "speaking")
+        self._run_motion_state("speaking", "on_speaking_start")
 
     def _reachy_on_idle(self) -> None:
         """Called when returning to idle state (HA state: Idle)."""
         # Disable high-frequency face tracking, switch to adaptive mode
         self._set_conversation_mode(False)
-
-        # Resume face tracking (may have been paused during speaking)
-        if self.camera_server is not None:
-            try:
-                self.camera_server.set_face_tracking_enabled(True)
-            except Exception as e:
-                _LOGGER.debug("Failed to resume face tracking: %s", e)
-
-        if not self.state.motion_enabled or not self.state.reachy_mini:
-            return
-        try:
-            _LOGGER.debug("Reachy Mini: Idle animation")
-            if self.state.motion:
-                self.state.motion.on_idle()
-        except Exception as e:
-            _LOGGER.error("Reachy Mini motion error: %s", e)
+        self._set_face_tracking_for_state(True, "idle")
+        self._run_motion_state("idle", "on_idle")
 
     def _set_conversation_mode(self, in_conversation: bool) -> None:
         """Set conversation mode for adaptive face tracking.
