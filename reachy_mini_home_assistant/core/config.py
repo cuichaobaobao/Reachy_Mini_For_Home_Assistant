@@ -83,7 +83,7 @@ class CameraConfig:
     port: int = 8081
 
     # Frame capture
-    fps_high: int = 25  # Active mode: smooth face tracking
+    fps_high: int = 15  # Active mode: smooth face tracking
     fps_low: int = 10  # Low power: periodic face check
     fps_idle: float = 5  # Ultra-low power: minimal CPU
 
@@ -101,7 +101,7 @@ class CameraConfig:
     idle_threshold: float = 30.0  # Seconds without face -> idle
 
     # Gesture detection runtime tuning
-    gesture_detection_interval: int = 1  # Run every frame for responsive gestures
+    gesture_detection_interval: int = 2  # Run every other frame for balanced responsiveness
 
 
 @dataclass
@@ -298,8 +298,6 @@ class Config:
 
         # Camera
         cls.camera.port = _env_int("REACHY_CAMERA_PORT", cls.camera.port)
-        cls.camera.fps_high = _env_int("REACHY_CAMERA_FPS", cls.camera.fps_high)
-        cls.camera.quality = _env_int("REACHY_CAMERA_QUALITY", cls.camera.quality)
 
         # Motion
         cls.motion.control_rate_hz = _env_float("REACHY_MOTION_CONTROL_RATE", cls.motion.control_rate_hz)
@@ -425,15 +423,6 @@ class Config:
             },
             "camera": {
                 "port": cls.camera.port,
-                "fps_high": cls.camera.fps_high,
-                "fps_low": cls.camera.fps_low,
-                "fps_idle": cls.camera.fps_idle,
-                "quality": cls.camera.quality,
-                "face_confidence_threshold": cls.camera.face_confidence_threshold,
-                "face_lost_delay": cls.camera.face_lost_delay,
-                "interpolation_duration": cls.camera.interpolation_duration,
-                "offset_scale": cls.camera.offset_scale,
-                "gesture_detection_interval": cls.camera.gesture_detection_interval,
             },
             "motion": {
                 "control_rate_hz": cls.motion.control_rate_hz,
