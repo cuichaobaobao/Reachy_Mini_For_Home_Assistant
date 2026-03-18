@@ -988,8 +988,7 @@ class ReachyController:
         if not self.is_available:
             return None
         try:
-            if self.reachy.media and hasattr(self.reachy.media, "get_DoA"):
-                return self.reachy.media.get_DoA()
+            return self.reachy.media.get_DoA()
         except Exception as e:
             logger.debug(f"Error getting DOA: {e}")
         return None

@@ -55,6 +55,9 @@ class EntityRegistry:
         # Sleep state entities (will be initialized in _setup_phase2_entities)
         self._sleep_mode_entity: BinarySensorEntity | None = None
         self._services_suspended_entity: BinarySensorEntity | None = None
+        self._face_detected_entity: BinarySensorEntity | None = None
+        self._gesture_entity: TextSensorEntity | None = None
+        self._gesture_confidence_entity: SensorEntity | None = None
 
         # Gesture detection state
         self._current_gesture = "none"
@@ -137,6 +140,12 @@ class EntityRegistry:
         state = getattr(self.server, "state", None)
         if state is not None:
             state.save_preferences()
+
+    def _set_preference_and_save(self, key: str, value) -> None:
+        prefs = self._get_preferences()
+        if prefs is not None:
+            setattr(prefs, key, value)
+            self._save_preferences()
 
     def _idle_behavior_allows_vision(self) -> bool:
         prefs = self._get_preferences()
@@ -745,31 +754,11 @@ class EntityRegistry:
         """Setup Phase 10 entities: Camera for Home Assistant integration."""
 
         def get_camera_image() -> bytes | None:
-            """Get camera snapshot as JPEG bytes.
-
-            Dynamically retrieves camera_server from server state to handle
-            the case where camera is started after entity registration.
-            """
-            # Try to get camera_server from multiple sources
-            camera_server = self.camera_server  # Direct reference
-
-            # If direct reference is None, try to get from server state
-            if camera_server is None and hasattr(self.server, "state") and self.server.state:
-                # Check if there's a camera_server stored in state
-                if hasattr(self.server.state, "_camera_server"):
-                    camera_server = self.server.state._camera_server
-                # Or check if server has a reference
-                elif hasattr(self.server, "camera_server"):
-                    camera_server = self.server.camera_server
-
-            if camera_server:
+            if self.camera_server:
                 try:
-                    return camera_server.get_snapshot()
+                    return self.camera_server.get_snapshot()
                 except Exception as e:
-                    import logging
-
-                    logger = logging.getLogger(__name__)
-                    logger.debug("Failed to get camera snapshot: %s", e)
+                    _LOGGER.debug("Failed to get camera snapshot: %s", e)
             return None
 
         entities.append(
@@ -790,28 +779,19 @@ class EntityRegistry:
         rc = self.reachy_controller
 
         def set_agc_enabled_with_save(enabled: bool) -> None:
-            """Set AGC enabled and save to preferences."""
             rc.set_agc_enabled(enabled)
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.agc_enabled = enabled
-                self.server.state.save_preferences()
-                _LOGGER.debug("AGC enabled saved to preferences: %s", enabled)
+            self._set_preference_and_save("agc_enabled", enabled)
+            _LOGGER.debug("AGC enabled saved to preferences: %s", enabled)
 
         def set_agc_max_gain_with_save(gain: float) -> None:
-            """Set AGC max gain and save to preferences."""
             rc.set_agc_max_gain(gain)
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.agc_max_gain = gain
-                self.server.state.save_preferences()
-                _LOGGER.debug("AGC max gain saved to preferences: %.1f dB", gain)
+            self._set_preference_and_save("agc_max_gain", gain)
+            _LOGGER.debug("AGC max gain saved to preferences: %.1f dB", gain)
 
         def set_noise_suppression_with_save(level: float) -> None:
-            """Set noise suppression and save to preferences."""
             rc.set_noise_suppression(level)
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.noise_suppression = level
-                self.server.state.save_preferences()
-                _LOGGER.debug("Noise suppression saved to preferences: %.1f%%", level)
+            self._set_preference_and_save("noise_suppression", level)
+            _LOGGER.debug("Noise suppression saved to preferences: %.1f%%", level)
 
         entities.append(
             SwitchEntity(
@@ -884,18 +864,11 @@ class EntityRegistry:
         """Setup Phase 21 entities: Continuous conversation mode."""
 
         def get_continuous_conversation() -> bool:
-            """Get current continuous conversation mode state."""
-            if hasattr(self.server, "state") and self.server.state:
-                prefs = self.server.state.preferences
-                return getattr(prefs, "continuous_conversation", False)
-            return False
+            return self._get_pref_bool("continuous_conversation")
 
         def set_continuous_conversation(enabled: bool) -> None:
-            """Set continuous conversation mode and save to preferences."""
-            if hasattr(self.server, "state") and self.server.state:
-                self.server.state.preferences.continuous_conversation = enabled
-                self.server.state.save_preferences()
-                _LOGGER.info("Continuous conversation mode %s", "enabled" if enabled else "disabled")
+            self._set_pref_bool("continuous_conversation", enabled)
+            _LOGGER.info("Continuous conversation mode %s", "enabled" if enabled else "disabled")
 
         entities.append(
             SwitchEntity(
@@ -980,14 +953,14 @@ class EntityRegistry:
 
     def update_face_detected_state(self) -> None:
         """Push face_detected state update to Home Assistant."""
-        if hasattr(self, "_face_detected_entity") and self._face_detected_entity:
+        if self._face_detected_entity:
             self._face_detected_entity.update_state()
 
     def update_gesture_state(self) -> None:
         """Push gesture state update to Home Assistant."""
-        if hasattr(self, "_gesture_entity") and self._gesture_entity:
+        if self._gesture_entity:
             self._gesture_entity.update_state()
-        if hasattr(self, "_gesture_confidence_entity") and self._gesture_confidence_entity:
+        if self._gesture_confidence_entity:
             self._gesture_confidence_entity.update_state()
 
     def set_sleep_mode(self, is_sleeping: bool) -> None:
