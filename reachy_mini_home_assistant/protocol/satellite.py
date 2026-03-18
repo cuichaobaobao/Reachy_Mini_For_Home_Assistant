@@ -529,11 +529,15 @@ class VoiceSatelliteProtocol(APIServer):
             ]
         )
         self.duck()
-        self.state.tts_player.play(self.state.wakeup_sound, done_callback=self._on_wakeup_sound_finished)
+        self._play_wakeup_sound()
 
     def _on_wakeup_sound_finished(self) -> None:
         """Start microphone streaming after wakeup sound finishes."""
         self._is_streaming_audio = True
+
+    def _play_wakeup_sound(self) -> None:
+        """Play wakeup sound and resume microphone streaming when it ends."""
+        self.state.tts_player.play(self.state.wakeup_sound, done_callback=self._on_wakeup_sound_finished)
 
     def on_authenticated(self) -> None:
         """Replay current entity states after ESPHome authentication."""
@@ -620,7 +624,7 @@ class VoiceSatelliteProtocol(APIServer):
 
             # Stay in listening mode
             self._reachy_on_listening()
-            self.state.tts_player.play(self.state.wakeup_sound, done_callback=self._on_wakeup_sound_finished)
+            self._play_wakeup_sound()
         else:
             self._clear_conversation()
             self.unduck()

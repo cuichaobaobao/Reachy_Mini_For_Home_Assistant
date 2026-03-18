@@ -335,42 +335,11 @@ class VoiceAssistantService:
         _LOGGER.warning("Suspending voice services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
-
-        # Update state
-        if self._state is not None:
-            self._state.services_suspended = True
-
-        # Clear audio buffer to avoid processing stale data
+        self._set_service_state(suspended=True)
         self._audio_buffer.clear()
-
-        # Suspend satellite (stops TTS, music, wake word processing)
-        if self._state is not None and self._state.satellite is not None:
-            try:
-                self._state.satellite.suspend()
-                _LOGGER.debug("Satellite suspended")
-            except Exception as e:
-                _LOGGER.warning("Error suspending satellite: %s", e)
-
-        # Suspend audio players
-        if self._state is not None:
-            if self._state.tts_player is not None:
-                try:
-                    self._state.tts_player.suspend()
-                except Exception as e:
-                    _LOGGER.warning("Error suspending TTS player: %s", e)
-            if self._state.music_player is not None:
-                try:
-                    self._state.music_player.suspend()
-                except Exception as e:
-                    _LOGGER.warning("Error suspending music player: %s", e)
-
-        # Stop media recording to save CPU
-        try:
-            self.reachy_mini.media.stop_recording()
-            self.reachy_mini.media.stop_playing()
-            _LOGGER.debug("Media system stopped")
-        except Exception as e:
-            _LOGGER.warning("Error stopping media: %s", e)
+        self._suspend_satellite()
+        self._set_audio_players_suspended(True)
+        self._stop_media_system()
 
         _LOGGER.info("Voice services suspended - camera and motion remain active")
 
@@ -381,43 +350,10 @@ class VoiceAssistantService:
         """
         _LOGGER.info("Resuming voice services (%s)", reason)
         self._robot_services_paused.clear()
-
-        # Update state
-        if self._state is not None:
-            self._state.services_suspended = False
-
-        # Restart media system first
-        try:
-            media = self.reachy_mini.media
-            if media.audio is not None:
-                media.start_recording()
-                media.start_playing()
-                _LOGGER.info("Media system restarted")
-        except Exception as e:
-            _LOGGER.warning("Failed to restart media: %s", e)
-
-        # Resume satellite
-        if self._state is not None and self._state.satellite is not None:
-            try:
-                self._state.satellite.resume()
-                _LOGGER.debug("Satellite resumed")
-            except Exception as e:
-                _LOGGER.warning("Error resuming satellite: %s", e)
-
-        # Resume audio players
-        if self._state is not None:
-            if self._state.tts_player is not None:
-                try:
-                    self._state.tts_player.resume()
-                except Exception as e:
-                    _LOGGER.warning("Error resuming TTS player: %s", e)
-            if self._state.music_player is not None:
-                try:
-                    self._state.music_player.resume()
-                except Exception as e:
-                    _LOGGER.warning("Error resuming music player: %s", e)
-
-        # Signal waiting threads that services are resumed
+        self._set_service_state(suspended=False)
+        self._start_media_system()
+        self._resume_satellite()
+        self._set_audio_players_suspended(False)
         self._robot_services_resumed.set()
 
         _LOGGER.info("Voice services resumed - camera and motion remained active")
@@ -430,14 +366,7 @@ class VoiceAssistantService:
         _LOGGER.warning("Suspending non-ESPHome services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
-
-        # Update state
-        if self._state is not None:
-            if set_sleep_state:
-                self._state.is_sleeping = True
-            self._state.services_suspended = True
-
-        # Clear audio buffer to avoid processing stale data
+        self._set_service_state(suspended=True, sleeping=set_sleep_state)
         self._audio_buffer.clear()
 
         # Suspend camera server (stops thread and releases YOLO model)
@@ -458,34 +387,9 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Error suspending motion: %s", e)
 
-        # Suspend satellite
-        if self._state is not None and self._state.satellite is not None:
-            try:
-                self._state.satellite.suspend()
-                _LOGGER.debug("Satellite suspended")
-            except Exception as e:
-                _LOGGER.warning("Error suspending satellite: %s", e)
-
-        # Suspend audio players
-        if self._state is not None:
-            if self._state.tts_player is not None:
-                try:
-                    self._state.tts_player.suspend()
-                except Exception as e:
-                    _LOGGER.warning("Error suspending TTS player: %s", e)
-            if self._state.music_player is not None:
-                try:
-                    self._state.music_player.suspend()
-                except Exception as e:
-                    _LOGGER.warning("Error suspending music player: %s", e)
-
-        # Stop media recording to save CPU
-        try:
-            self.reachy_mini.media.stop_recording()
-            self.reachy_mini.media.stop_playing()
-            _LOGGER.debug("Media system stopped")
-        except Exception as e:
-            _LOGGER.warning("Error stopping media: %s", e)
+        self._suspend_satellite()
+        self._set_audio_players_suspended(True)
+        self._stop_media_system()
 
         _LOGGER.info("Services suspended - ESPHome only")
 
@@ -493,22 +397,8 @@ class VoiceAssistantService:
         """Resume all non-ESPHome services after sleep/disconnect."""
         _LOGGER.info("Resuming non-ESPHome services (%s)", reason)
         self._robot_services_paused.clear()
-
-        # Update state
-        if self._state is not None:
-            if clear_sleep_state:
-                self._state.is_sleeping = False
-            self._state.services_suspended = False
-
-        # Restart media system first
-        try:
-            media = self.reachy_mini.media
-            if media.audio is not None:
-                media.start_recording()
-                media.start_playing()
-                _LOGGER.info("Media system restarted")
-        except Exception as e:
-            _LOGGER.warning("Failed to restart media: %s", e)
+        self._set_service_state(suspended=False, sleeping=False if clear_sleep_state else None)
+        self._start_media_system()
 
         # Resume camera server (reloads YOLO model and restarts capture thread)
         # Only resume if camera is NOT disabled (user has not manually disabled it)
@@ -528,31 +418,68 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Error resuming motion: %s", e)
 
-        # Resume satellite
-        if self._state is not None and self._state.satellite is not None:
-            try:
-                self._state.satellite.resume()
-                _LOGGER.debug("Satellite resumed")
-            except Exception as e:
-                _LOGGER.warning("Error resuming satellite: %s", e)
-
-        # Resume audio players
-        if self._state is not None:
-            if self._state.tts_player is not None:
-                try:
-                    self._state.tts_player.resume()
-                except Exception as e:
-                    _LOGGER.warning("Error resuming TTS player: %s", e)
-            if self._state.music_player is not None:
-                try:
-                    self._state.music_player.resume()
-                except Exception as e:
-                    _LOGGER.warning("Error resuming music player: %s", e)
-
-        # Signal waiting threads that services are resumed
+        self._resume_satellite()
+        self._set_audio_players_suspended(False)
         self._robot_services_resumed.set()
 
         _LOGGER.info("All services resumed - system fully operational")
+
+    def _set_service_state(self, *, suspended: bool, sleeping: bool | None = None) -> None:
+        if self._state is None:
+            return
+        if sleeping is not None:
+            self._state.is_sleeping = sleeping
+        self._state.services_suspended = suspended
+
+    def _suspend_satellite(self) -> None:
+        if self._state is None or self._state.satellite is None:
+            return
+        try:
+            self._state.satellite.suspend()
+            _LOGGER.debug("Satellite suspended")
+        except Exception as e:
+            _LOGGER.warning("Error suspending satellite: %s", e)
+
+    def _resume_satellite(self) -> None:
+        if self._state is None or self._state.satellite is None:
+            return
+        try:
+            self._state.satellite.resume()
+            _LOGGER.debug("Satellite resumed")
+        except Exception as e:
+            _LOGGER.warning("Error resuming satellite: %s", e)
+
+    def _set_audio_players_suspended(self, suspended: bool) -> None:
+        if self._state is None:
+            return
+        action = "suspend" if suspended else "resume"
+        verb = "suspending" if suspended else "resuming"
+        for player_name, label in (("tts_player", "TTS player"), ("music_player", "music player")):
+            player = getattr(self._state, player_name)
+            if player is None:
+                continue
+            try:
+                getattr(player, action)()
+            except Exception as e:
+                _LOGGER.warning("Error %s %s: %s", verb, label, e)
+
+    def _stop_media_system(self) -> None:
+        try:
+            self.reachy_mini.media.stop_recording()
+            self.reachy_mini.media.stop_playing()
+            _LOGGER.debug("Media system stopped")
+        except Exception as e:
+            _LOGGER.warning("Error stopping media: %s", e)
+
+    def _start_media_system(self) -> None:
+        try:
+            media = self.reachy_mini.media
+            if media.audio is not None:
+                media.start_recording()
+                media.start_playing()
+                _LOGGER.info("Media system restarted")
+        except Exception as e:
+            _LOGGER.warning("Failed to restart media: %s", e)
 
     def _on_robot_disconnected(self) -> None:
         """Called when robot connection is lost (e.g., daemon unavailable).
