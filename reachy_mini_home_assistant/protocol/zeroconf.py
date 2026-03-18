@@ -96,18 +96,24 @@ class SendspinDiscovery:
     when a server is found.
     """
 
-    def __init__(self, on_server_found: Callable[[str], "Coroutine[Any, Any, None]"]) -> None:
+    def __init__(
+        self,
+        on_server_found: Callable[[str], "Coroutine[Any, Any, None]"],
+        on_server_removed: Callable[[str], "Coroutine[Any, Any, None]"] | None = None,
+    ) -> None:
         """Initialize Sendspin discovery.
 
         Args:
             on_server_found: Async callback called with server URL when discovered.
         """
         self._on_server_found = on_server_found
+        self._on_server_removed = on_server_removed
         self._loop: asyncio.AbstractEventLoop | None = None
         self._zeroconf: AsyncZeroconf | None = None
         self._browser: AsyncServiceBrowser | None = None
         self._discovery_task: asyncio.Task | None = None
         self._running = False
+        self._known_servers: dict[str, str] = {}
 
     @property
     def is_running(self) -> bool:
@@ -183,6 +189,16 @@ class SendspinDiscovery:
         except Exception as e:
             _LOGGER.error("Error in Sendspin server callback: %s", e)
 
+    async def _handle_service_removed(self, name: str) -> None:
+        """Handle removed service."""
+        url = self._known_servers.pop(name, None)
+        if url is None or self._on_server_removed is None:
+            return
+        try:
+            await self._on_server_removed(url)
+        except Exception as e:
+            _LOGGER.error("Error in Sendspin remove callback: %s", e)
+
 
 class _SendspinServiceListener:
     """Listener for Sendspin server mDNS advertisements."""
@@ -217,6 +233,12 @@ class _SendspinServiceListener:
     def remove_service(self, zeroconf, service_type: str, name: str) -> None:
         """Called when a Sendspin server goes offline."""
         _LOGGER.info("Sendspin server removed: %s", name)
+        if self._discovery._loop is None:
+            return
+        asyncio.run_coroutine_threadsafe(
+            self._discovery._handle_service_removed(name),
+            self._discovery._loop,
+        )
 
     async def _process_service(self, zeroconf, service_type: str, name: str) -> None:
         """Process discovered service and notify callback."""
@@ -233,6 +255,7 @@ class _SendspinServiceListener:
 
             host = addresses[0]
             url = self._build_url(host, info.port, info.properties)
+            self._discovery._known_servers[name] = url
 
             _LOGGER.info("Discovered Sendspin server: %s at %s", name, url)
 

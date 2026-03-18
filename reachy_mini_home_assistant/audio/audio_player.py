@@ -111,6 +111,7 @@ class AudioPlayer:
         self._sendspin_url: str | None = None
         self._sendspin_discovery: SendspinDiscovery | None = None
         self._sendspin_unsubscribers: list[Callable] = []
+        self._known_sendspin_servers: set[str] = set()
 
         # Audio buffer for Sendspin playback
         self._sendspin_audio_format: PCMFormat | None = None
@@ -187,7 +188,7 @@ class AudioPlayer:
         from ..protocol.zeroconf import SendspinDiscovery
 
         _LOGGER.info("Starting Sendspin server discovery...")
-        self._sendspin_discovery = SendspinDiscovery(self._on_sendspin_server_found)
+        self._sendspin_discovery = SendspinDiscovery(self._on_sendspin_server_found, self._on_sendspin_server_removed)
         await self._sendspin_discovery.start()
 
     async def _on_sendspin_server_found(self, server_url: str) -> None:
@@ -196,7 +197,15 @@ class AudioPlayer:
         Args:
             server_url: WebSocket URL of the discovered server.
         """
+        self._known_sendspin_servers.add(server_url)
         await self._connect_to_server(server_url)
+
+    async def _on_sendspin_server_removed(self, server_url: str) -> None:
+        """Disconnect when the active Sendspin server disappears."""
+        self._known_sendspin_servers.discard(server_url)
+        if self._sendspin_url == server_url:
+            _LOGGER.info("Active Sendspin server disappeared: %s", server_url)
+            await self._disconnect_sendspin()
 
     async def _connect_to_server(self, server_url: str) -> bool:
         """Connect to a discovered Sendspin server as PLAYER.
@@ -398,6 +407,7 @@ class AudioPlayer:
         self._sendspin_enabled = False
         self._sendspin_url = None
         self._sendspin_audio_format = None
+        self._sendspin_playback_started = False
 
     async def stop_sendspin(self) -> None:
         """Stop Sendspin discovery and disconnect from server."""
