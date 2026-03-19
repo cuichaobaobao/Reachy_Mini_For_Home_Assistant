@@ -872,8 +872,6 @@ class MovementManager:
                 self.state.target_x = 0.0
                 self.state.target_y = 0.0
                 self.state.target_z = 0.0
-                self.state.target_antenna_left = 0.0
-                self.state.target_antenna_right = 0.0
                 self._idle_antenna_smoothed = None
                 self._last_idle_antenna_update = 0.0
 
