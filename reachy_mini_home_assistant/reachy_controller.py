@@ -2,6 +2,7 @@
 
 import logging
 import math
+import threading
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -67,6 +68,8 @@ class ReachyController:
         # Callback for sleep/wake to notify VoiceAssistant
         self._on_sleep_callback = None
         self._on_wake_callback = None
+        self._sleep_transition_lock = threading.Lock()
+        self._sleep_transition_thread: threading.Thread | None = None
 
         # Status caching - only for get_status() which may trigger I/O
         # Note: get_current_head_pose() and get_current_joint_positions() are
@@ -400,6 +403,45 @@ class ReachyController:
 
         except Exception as e:
             logger.error(f"Error executing sleep: {e}")
+
+    def get_doa_enabled(self) -> bool:
+        """Get whether DOA sound tracking is enabled."""
+        return self._get_movement_bool("get_doa_enabled", "DOA tracking")
+
+    def set_doa_enabled(self, enabled: bool) -> None:
+        """Enable or disable DOA sound tracking."""
+        movement_manager = self._with_movement_manager("set_doa_enabled")
+        if movement_manager is not None:
+            movement_manager.set_doa_enabled(enabled)
+
+    def request_sleep_state(self, sleeping: bool) -> bool:
+        """Execute sleep/wake transitions in a background thread.
+
+        Returns True when a transition was started.
+        """
+
+        def _run_transition() -> None:
+            try:
+                if sleeping:
+                    self.go_to_sleep()
+                else:
+                    self.wake_up()
+            finally:
+                with self._sleep_transition_lock:
+                    self._sleep_transition_thread = None
+
+        with self._sleep_transition_lock:
+            if self._sleep_transition_thread is not None and self._sleep_transition_thread.is_alive():
+                logger.info("Sleep transition already in progress")
+                return False
+
+            self._sleep_transition_thread = threading.Thread(
+                target=_run_transition,
+                name="reachy-sleep-transition",
+                daemon=True,
+            )
+            self._sleep_transition_thread.start()
+            return True
 
     def _daemon_command(self, path: str, params: dict[str, str] | None = None) -> None:
         """Send a daemon command request and wait for the daemon state to settle."""

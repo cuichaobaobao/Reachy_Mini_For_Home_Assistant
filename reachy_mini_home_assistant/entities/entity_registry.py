@@ -158,11 +158,6 @@ class EntityRegistry:
             self.camera_server.set_gesture_detection_enabled(False)
             return
 
-        if not prefs.idle_behavior_enabled:
-            self.camera_server.set_face_tracking_enabled(False)
-            self.camera_server.set_gesture_detection_enabled(False)
-            return
-
         self.camera_server.set_face_tracking_enabled(bool(prefs.face_tracking_enabled))
         self.camera_server.set_gesture_detection_enabled(bool(prefs.gesture_detection_enabled))
 
@@ -192,9 +187,6 @@ class EntityRegistry:
         prefs = self._get_preferences()
         if prefs is not None:
             prefs.set_idle_behavior_enabled(enabled)
-            if not enabled:
-                prefs.face_tracking_enabled = False
-                prefs.gesture_detection_enabled = False
             self._save_preferences()
 
         self._apply_vision_runtime_state()
@@ -462,8 +454,6 @@ class EntityRegistry:
                 object_id="face_tracking_enabled",
                 icon="mdi:face-recognition",
                 pref_key="face_tracking_enabled",
-                getter_transform=lambda value: value and self._idle_behavior_allows_vision(),
-                setter_transform=lambda enabled: enabled and self._idle_behavior_allows_vision(),
                 after_set=self._apply_vision_runtime_state,
             )
         )
@@ -475,8 +465,6 @@ class EntityRegistry:
                 object_id="gesture_detection_enabled",
                 icon="mdi:hand-wave",
                 pref_key="gesture_detection_enabled",
-                getter_transform=lambda value: value and self._idle_behavior_allows_vision(),
-                setter_transform=lambda enabled: enabled and self._idle_behavior_allows_vision(),
                 after_set=self._apply_vision_runtime_state,
             )
         )
@@ -524,10 +512,7 @@ class EntityRegistry:
             is_sleeping = get_sleep_control()
             if sleeping == is_sleeping:
                 return
-            if sleeping:
-                rc.go_to_sleep()
-            else:
-                rc.wake_up()
+            rc.request_sleep_state(sleeping)
 
         entities.append(
             SwitchEntity(
@@ -629,13 +614,10 @@ class EntityRegistry:
         )
 
         def get_doa_tracking_state() -> bool:
-            if rc._movement_manager is not None:
-                return rc._movement_manager._doa_enabled
-            return True
+            return rc.get_doa_enabled()
 
         def set_doa_tracking_state(enabled: bool) -> None:
-            if rc._movement_manager is not None:
-                rc._movement_manager.set_doa_enabled(enabled)
+            rc.set_doa_enabled(enabled)
             _LOGGER.info("DOA tracking %s", "enabled" if enabled else "disabled")
 
         entities.append(

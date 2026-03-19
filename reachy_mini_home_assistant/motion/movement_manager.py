@@ -511,6 +511,10 @@ class MovementManager:
         self._doa_tracker.enabled = enabled
         logger.info("DOA tracking %s", "enabled" if enabled else "disabled")
 
+    def get_doa_enabled(self) -> bool:
+        """Get whether DOA sound tracking is enabled."""
+        return self._doa_enabled
+
     def get_idle_behavior_enabled(self) -> bool:
         """Get whether any idle behavior subsystem is enabled."""
         return self._idle_behavior_enabled()

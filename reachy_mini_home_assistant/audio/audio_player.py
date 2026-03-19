@@ -287,9 +287,7 @@ class AudioPlayer:
             return
 
         try:
-            audio_backend = getattr(self.reachy_mini.media, "audio", None)
-            if audio_backend is not None and hasattr(audio_backend, "clear_output_buffer"):
-                audio_backend.clear_output_buffer()
+            self.reachy_mini.media.audio.clear_output_buffer()
         except Exception:
             _LOGGER.debug("Failed to clear output buffer", exc_info=True)
 
@@ -769,7 +767,7 @@ class AudioPlayer:
         self._stop_flag.clear()
 
         # Limit active playback threads to prevent resource exhaustion
-        if hasattr(self, "_playback_thread") and self._playback_thread and self._playback_thread.is_alive():
+        if self._playback_thread and self._playback_thread.is_alive():
             _LOGGER.warning("Previous playback still active, stopping it")
             self.stop()
 
@@ -903,8 +901,6 @@ class AudioPlayer:
                 max_duration = (duration_s * 1.5) if has_duration else 60.0
                 playback_timeout = start_time + max_duration
 
-                is_playing_fn = getattr(self.reachy_mini.media, "is_playing", None)
-
                 while True:
                     # Check for timeout (safety guard)
                     if time.time() > playback_timeout:
@@ -919,9 +915,9 @@ class AudioPlayer:
                     if has_duration:
                         if (time.time() - start_time) >= duration_s:
                             break
-                    elif callable(is_playing_fn):
+                    else:
                         try:
-                            if not bool(is_playing_fn()):
+                            if not bool(self.reachy_mini.media.is_playing()):
                                 break
                         except Exception:
                             pass
@@ -1336,9 +1332,7 @@ class AudioPlayer:
                 if feed_done.is_set() and eos_seen:
                     sink_eos = False
                     try:
-                        sink_eos_fn = getattr(appsink, "is_eos", None)
-                        if callable(sink_eos_fn):
-                            sink_eos = bool(sink_eos_fn())
+                        sink_eos = bool(appsink.is_eos())
                     except Exception:
                         sink_eos = False
 
