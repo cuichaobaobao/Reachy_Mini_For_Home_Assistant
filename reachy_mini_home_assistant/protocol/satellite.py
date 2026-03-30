@@ -1,6 +1,7 @@
 """Voice satellite protocol for Reachy Mini."""
 
 import hashlib
+import importlib.metadata
 import logging
 import math
 import posixpath
@@ -51,6 +52,7 @@ from google.protobuf import message
 from pymicro_wakeword import MicroWakeWord
 from pyopen_wakeword import OpenWakeWord
 
+from .. import __version__
 from ..core.util import call_all
 
 # DISABLED: Emotion detection moved to Home Assistant blueprint
@@ -65,6 +67,11 @@ from .api_server import APIServer
 
 _LOGGER = logging.getLogger(__name__)
 IDLE_RETURN_DELAY_S = 10.0
+
+try:
+    _AIOESPHOMEAPI_VERSION = importlib.metadata.version("aioesphomeapi")
+except Exception:
+    _AIOESPHOMEAPI_VERSION = "unknown"
 
 
 class VoiceSatelliteProtocol(APIServer):
@@ -90,6 +97,8 @@ class VoiceSatelliteProtocol(APIServer):
         self._tts_played = False
         self._continue_conversation = False
         self._timer_finished = False
+        self._timer_ring_start: float | None = None
+        self._pending_voice_request: tuple[str | None, str | None] | None = None
         self._external_wake_words: dict[str, VoiceAssistantExternalWakeWord] = {}
 
         # Conversation tracking for continuous conversation
@@ -99,7 +108,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         # Track Home Assistant entity states for change detection
         self._ha_entity_states: dict[str, str] = {}
-        self._idle_return_timer: Optional[threading.Timer] = None
+        self._idle_return_timer: threading.Timer | None = None
         self._pipeline_active = False
 
         # Initialize Reachy controller
@@ -291,11 +300,11 @@ class VoiceSatelliteProtocol(APIServer):
 
         elif event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
             # Pipeline run ended
-            self._pipeline_active = False
             self._is_streaming_audio = False
 
             # Following reference project pattern
             if not self._tts_played:
+                self._pipeline_active = False
                 self._tts_finished()
 
             self._tts_played = False
@@ -310,7 +319,9 @@ class VoiceSatelliteProtocol(APIServer):
         if event_type == VoiceAssistantTimerEventType.VOICE_ASSISTANT_TIMER_FINISHED:
             if not self._timer_finished:
                 self.state.active_wake_words.add(self.state.stop_word.id)
+                self._set_stop_word_active(True)
                 self._timer_finished = True
+                self._timer_ring_start = time.monotonic()
                 self.duck()
                 self._play_timer_finished()
                 # Reachy Mini: Timer finished animation
@@ -352,7 +363,13 @@ class VoiceSatelliteProtocol(APIServer):
             yield DeviceInfoResponse(
                 uses_password=False,
                 name=self.state.name,
+                friendly_name=self.state.name,
+                project_name="ha-china.Reachy Mini For Home Assistant",
+                project_version=__version__,
+                esphome_version=_AIOESPHOMEAPI_VERSION,
                 mac_address=self.state.mac_address,
+                manufacturer="ha-china",
+                model="Reachy Mini Home Assistant Voice",
                 voice_assistant_feature_flags=(
                     VoiceAssistantFeature.VOICE_ASSISTANT
                     | VoiceAssistantFeature.API_AUDIO
@@ -505,8 +522,19 @@ class VoiceSatelliteProtocol(APIServer):
         """Handle wake word detection - start voice pipeline."""
         if self._timer_finished:
             self._timer_finished = False
+            self._timer_ring_start = None
+            self.unduck()
+            self.state.active_wake_words.discard(self.state.stop_word.id)
+            self._set_stop_word_active(False)
             self.state.tts_player.stop()
             _LOGGER.debug("Stopping timer finished sound")
+            return
+
+        if self.state.is_muted:
+            return
+
+        if self._pipeline_active:
+            _LOGGER.debug("Ignoring wake word - pipeline already active")
             return
 
         wake_word_phrase = wake_word.wake_word
@@ -514,21 +542,33 @@ class VoiceSatelliteProtocol(APIServer):
 
         self._turn_to_sound_source()
         conv_id = self._get_or_create_conversation_id()
-
-        self.send_messages(
-            [
-                VoiceAssistantRequest(
-                    start=True,
-                    wake_word_phrase=wake_word_phrase,
-                    conversation_id=conv_id,
-                )
-            ]
-        )
+        self._pipeline_active = True
         self.duck()
+        self._queue_voice_request_after_wakeup(wake_word_phrase=wake_word_phrase, conversation_id=conv_id)
         self._play_wakeup_sound()
+
+    def _queue_voice_request_after_wakeup(
+        self, *, wake_word_phrase: str | None = None, conversation_id: str | None = None
+    ) -> None:
+        """Store the next HA voice request until the wake sound finishes."""
+        self._pending_voice_request = (wake_word_phrase, conversation_id)
 
     def _on_wakeup_sound_finished(self) -> None:
         """Start microphone streaming after wakeup sound finishes."""
+        if self._pending_voice_request is None:
+            _LOGGER.debug("Wakeup sound finished with no pending voice request")
+            return
+
+        wake_word_phrase, conversation_id = self._pending_voice_request
+        self._pending_voice_request = None
+
+        request = VoiceAssistantRequest(start=True)
+        if wake_word_phrase:
+            request.wake_word_phrase = wake_word_phrase
+        if conversation_id:
+            request.conversation_id = conversation_id
+
+        self.send_messages([request])
         self._is_streaming_audio = True
 
     def _play_wakeup_sound(self) -> None:
@@ -548,12 +588,15 @@ class VoiceSatelliteProtocol(APIServer):
         self._pipeline_active = False
         self._is_streaming_audio = False
         self._continue_conversation = False
+        self._pending_voice_request = None
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self._set_stop_word_active(False)
         self.state.tts_player.stop()
 
         if self._timer_finished:
             self._timer_finished = False
+            self._timer_ring_start = None
+            self.unduck()
             _LOGGER.debug("Stopping timer finished sound")
         else:
             _LOGGER.debug("TTS response stopped manually")
@@ -589,6 +632,7 @@ class VoiceSatelliteProtocol(APIServer):
 
         Following reference project pattern: handle continue conversation here.
         """
+        self._pipeline_active = False
         self.state.active_wake_words.discard(self.state.stop_word.id)
         self._set_stop_word_active(False)
         self._run_motion_state("speaking_end", "on_speaking_end")
@@ -603,15 +647,8 @@ class VoiceSatelliteProtocol(APIServer):
             )
 
             conv_id = self._get_or_create_conversation_id()
-            self.send_messages(
-                [
-                    VoiceAssistantRequest(
-                        start=True,
-                        conversation_id=conv_id,
-                    )
-                ]
-            )
-
+            self._queue_voice_request_after_wakeup(conversation_id=conv_id)
+            self._pipeline_active = True
             self._reachy_on_listening()
             self._play_wakeup_sound()
         else:
@@ -689,8 +726,24 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _play_timer_finished(self) -> None:
         if not self._timer_finished:
+            self._timer_ring_start = None
             self.unduck()
             return
+
+        if self._timer_ring_start is not None:
+            elapsed = time.monotonic() - self._timer_ring_start
+            if elapsed >= self.state.timer_max_ring_seconds:
+                _LOGGER.info(
+                    "Timer auto-stopped after %.0f seconds (max=%.0f)",
+                    elapsed,
+                    self.state.timer_max_ring_seconds,
+                )
+                self._timer_finished = False
+                self._timer_ring_start = None
+                self.state.active_wake_words.discard(self.state.stop_word.id)
+                self._set_stop_word_active(False)
+                self.unduck()
+                return
 
         self.state.tts_player.play(
             self.state.timer_finished_sound,
@@ -704,9 +757,12 @@ class VoiceSatelliteProtocol(APIServer):
         # Clear streaming state on disconnect
         self._is_streaming_audio = False
         self._pipeline_active = False
+        self._pending_voice_request = None
         self._tts_url = None
         self._tts_played = False
         self._continue_conversation = False
+        self._timer_finished = False
+        self._timer_ring_start = None
         self._set_stop_word_active(False)
 
         # Trigger HA disconnected callback
@@ -1023,6 +1079,9 @@ class VoiceSatelliteProtocol(APIServer):
         _LOGGER.info("Suspending VoiceSatellite for sleep...")
         self._cancel_delayed_idle_return()
         self._pipeline_active = False
+        self._pending_voice_request = None
+        self._timer_finished = False
+        self._timer_ring_start = None
 
         # Stop any current TTS/music
         if self.state.tts_player:

@@ -102,6 +102,7 @@ class ServerState:
     satellite: "VoiceSatelliteProtocol | None" = None
     wake_words_changed: bool = False
     refractory_seconds: float = 2.0
+    timer_max_ring_seconds: float = 900.0
     _entities_initialized: bool = False
 
     # Sleep state (updated by SleepManager) - thread-safe via properties

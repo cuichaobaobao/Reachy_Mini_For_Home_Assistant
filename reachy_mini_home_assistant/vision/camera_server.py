@@ -463,13 +463,14 @@ class MJPEGCameraServer:
         while self._running:
             try:
                 current_time = time.time()
+                loop_time = time.monotonic()
 
                 # Determine if we should run AI inference this frame
                 should_run_ai = self._should_run_ai_inference(current_time)
                 should_run_face_tracking = (
                     self._face_tracking_enabled
                     and self._head_tracker is not None
-                    and current_time >= self._next_face_tracking_time
+                    and loop_time >= self._next_face_tracking_time
                 )
                 should_run_gesture = (
                     self._gesture_detection_enabled
@@ -502,7 +503,7 @@ class MJPEGCameraServer:
                         if should_run_face_tracking:
                             face_detect_count += 1
                             face_detected = self._process_face_tracking(frame, current_time)
-                            self._next_face_tracking_time = current_time + (1.0 / FACE_TRACKING_TARGET_FPS)
+                            self._next_face_tracking_time = time.monotonic() + (1.0 / FACE_TRACKING_TARGET_FPS)
 
                             # Update adaptive frame rate manager
                             self._frame_rate_manager.update(face_detected=face_detected)
@@ -520,6 +521,9 @@ class MJPEGCameraServer:
 
                         # Handle smooth interpolation when face lost
                         self._process_face_lost_interpolation(current_time)
+
+                elif self._face_tracking_enabled and self._head_tracker is not None:
+                    self._process_face_lost_interpolation(current_time)
 
                     # Gesture detection (runs independently of face detection)
                     # Reuse precomputed gate to avoid consuming the gesture counter twice.
