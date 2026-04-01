@@ -522,11 +522,8 @@ class MJPEGCameraServer:
                         # Handle smooth interpolation when face lost
                         self._process_face_lost_interpolation(current_time)
 
-                elif self._face_tracking_enabled and self._head_tracker is not None:
-                    self._process_face_lost_interpolation(current_time)
-
-                    # Gesture detection (runs independently of face detection)
-                    # Reuse precomputed gate to avoid consuming the gesture counter twice.
+                    # Gesture detection runs on the current frame regardless of
+                    # whether face tracking was scheduled this iteration.
                     if self._gesture_detection_enabled and self._gesture_detector is not None and should_run_gesture:
                         self._process_gesture_detection(frame)
 
@@ -542,6 +539,9 @@ class MJPEGCameraServer:
                         frame_count = 0
                         face_detect_count = 0
                         last_log_time = current_time
+
+                elif self._face_tracking_enabled and self._head_tracker is not None:
+                    self._process_face_lost_interpolation(current_time)
 
                 # Sleep to maintain target FPS (use adaptive rate)
                 # Keep a minimum processing cadence for gesture responsiveness.
