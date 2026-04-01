@@ -478,15 +478,6 @@ class EntityRegistry:
             if self.camera_server is not None:
                 self.camera_server.set_face_confidence_threshold(value)
 
-        def get_gesture_confidence_threshold() -> float:
-            return self._get_pref_float("gesture_confidence_threshold", 0.55)
-
-        def set_gesture_confidence_threshold(value: float) -> None:
-            value = max(0.0, min(1.0, float(value)))
-            self._set_pref_float("gesture_confidence_threshold", value)
-            if hasattr(self.server, "set_gesture_confidence_threshold"):
-                self.server.set_gesture_confidence_threshold(value)
-
         entities.append(
             self._make_preference_number(
                 key_name="face_confidence_threshold",
@@ -501,25 +492,11 @@ class EntityRegistry:
             )
         )
 
-        entities.append(
-            self._make_preference_number(
-                key_name="gesture_confidence_threshold",
-                name="Gesture Trigger Confidence",
-                object_id="gesture_confidence_threshold",
-                icon="mdi:gesture-tap-button",
-                getter=get_gesture_confidence_threshold,
-                setter=set_gesture_confidence_threshold,
-                min_value=0.0,
-                max_value=1.0,
-                step=0.01,
-            )
-        )
-
         _LOGGER.debug(
             "Phase 1 entities registered: daemon_state, backend_ready, speaker_volume, mute, camera_disabled, "
             "idle_behavior_enabled, sendspin_enabled, "
             "face_tracking_enabled, gesture_detection_enabled, "
-            "face_confidence_threshold, gesture_confidence_threshold"
+            "face_confidence_threshold"
         )
 
     def _setup_phase2_entities(self, entities: list) -> None:

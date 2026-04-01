@@ -63,7 +63,6 @@ class Preferences:
     face_tracking_enabled: bool = False
     gesture_detection_enabled: bool = False
     face_confidence_threshold: float = 0.5
-    gesture_confidence_threshold: float = 0.55
 
     def set_idle_behavior_enabled(self, enabled: bool) -> None:
         """Update the unified idle behavior toggle."""

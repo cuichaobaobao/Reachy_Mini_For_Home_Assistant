@@ -36,6 +36,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _safe_get_value(getter: Callable[[], object] | None, current_value: object, entity_name: str) -> object:
+    """Read an entity value without letting getter failures break the ESPHome session."""
+    if getter is None:
+        return current_value
+    try:
+        return getter()
+    except Exception as e:
+        logger.error("Entity getter failed for %s: %s", entity_name, e)
+        return current_value
+
+
 class ESPHomeEntity:
     """Base class for ESPHome entities."""
 
@@ -181,9 +192,7 @@ class TextSensorEntity(ESPHomeEntity):
 
     @property
     def value(self) -> str:
-        if self._value_getter:
-            return self._value_getter()
-        return self._value
+        return str(_safe_get_value(self._value_getter, self._value, self.object_id))
 
     @value.setter
     def value(self, new_value: str) -> None:
@@ -239,9 +248,7 @@ class BinarySensorEntity(ESPHomeEntity):
 
     @property
     def value(self) -> bool:
-        if self._value_getter:
-            return self._value_getter()
-        return self._value
+        return bool(_safe_get_value(self._value_getter, self._value, self.object_id))
 
     @value.setter
     def value(self, new_value: bool) -> None:
@@ -308,9 +315,7 @@ class NumberEntity(ESPHomeEntity):
 
     @property
     def value(self) -> float:
-        if self._value_getter:
-            return self._value_getter()
-        return self._value
+        return float(_safe_get_value(self._value_getter, self._value, self.object_id))
 
     @value.setter
     def value(self, new_value: float) -> None:
