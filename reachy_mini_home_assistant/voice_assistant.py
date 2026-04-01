@@ -238,12 +238,17 @@ class VoiceAssistantService:
         camera_server = self._camera_server  # Capture for lambda
 
         def protocol_factory():
-            protocol = VoiceSatelliteProtocol(self._state, camera_server=camera_server, voice_assistant_service=self)
-            # Set HA connection callbacks
-            protocol.set_ha_connection_callbacks(
-                on_connected=self._on_ha_connected, on_disconnected=self._on_ha_disconnected
-            )
-            return protocol
+            try:
+                protocol = VoiceSatelliteProtocol(
+                    self._state, camera_server=camera_server, voice_assistant_service=self
+                )
+                protocol.set_ha_connection_callbacks(
+                    on_connected=self._on_ha_connected, on_disconnected=self._on_ha_disconnected
+                )
+                return protocol
+            except Exception:
+                _LOGGER.exception("Failed to initialize ESPHome protocol connection")
+                raise
 
         self._server = await loop.create_server(
             protocol_factory,

@@ -182,9 +182,6 @@ class VoiceSatelliteProtocol(APIServer):
         # Initialize event-emotion mapper for HA state change reactions
         self._event_emotion_mapper = EventEmotionMapper()
         self._event_emotion_mapper.set_emotion_callback(self._play_emotion)
-        # Load custom mappings from JSON if available
-        from pathlib import Path
-
         mappings_file = Path(__file__).resolve().parent.parent / "animations" / "event_mappings.json"
         if mappings_file.exists():
             self._event_emotion_mapper.load_from_json(mappings_file)

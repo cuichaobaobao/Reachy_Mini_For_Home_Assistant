@@ -46,40 +46,47 @@ class APIServer(asyncio.Protocol):
         return
 
     def process_packet(self, msg_type: int, packet_data: bytes) -> None:
-        msg_class = MESSAGE_TYPE_TO_PROTO[msg_type]
-        msg_inst = msg_class.FromString(packet_data)
-        _LOGGER.debug("Received message: %s", msg_class.__name__)
+        try:
+            msg_class = MESSAGE_TYPE_TO_PROTO[msg_type]
+            msg_inst = msg_class.FromString(packet_data)
+            _LOGGER.debug("Received message: %s", msg_class.__name__)
 
-        if isinstance(msg_inst, HelloRequest):
-            _LOGGER.info("HelloRequest received, sending HelloResponse")
-            self.send_messages(
-                [
-                    HelloResponse(
-                        api_version_major=1,
-                        api_version_minor=10,
-                        name=self.name,
-                    )
-                ]
-            )
-            return
+            if isinstance(msg_inst, HelloRequest):
+                _LOGGER.info("HelloRequest received, sending HelloResponse")
+                self.send_messages(
+                    [
+                        HelloResponse(
+                            api_version_major=1,
+                            api_version_minor=10,
+                            name=self.name,
+                        )
+                    ]
+                )
+                return
 
-        if isinstance(msg_inst, AuthenticationRequest):
-            _LOGGER.info("AuthenticationRequest received, sending AuthenticationResponse")
-            self.send_messages([AuthenticationResponse()])
-            self.on_authenticated()
-        elif isinstance(msg_inst, DisconnectRequest):
-            self.send_messages([DisconnectResponse()])
-            _LOGGER.debug("Disconnect requested")
+            if isinstance(msg_inst, AuthenticationRequest):
+                _LOGGER.info("AuthenticationRequest received, sending AuthenticationResponse")
+                self.send_messages([AuthenticationResponse()])
+                self.on_authenticated()
+            elif isinstance(msg_inst, DisconnectRequest):
+                self.send_messages([DisconnectResponse()])
+                _LOGGER.debug("Disconnect requested")
+                if self._transport:
+                    self._transport.close()
+                    self._transport = None
+                    self._writelines = None
+            elif isinstance(msg_inst, PingRequest):
+                self.send_messages([PingResponse()])
+            elif msgs := self.handle_message(msg_inst):
+                if isinstance(msgs, message.Message):
+                    msgs = [msgs]
+                self.send_messages(msgs)
+        except Exception:
+            _LOGGER.exception("Unhandled ESPHome protocol error while processing message type %s", msg_type)
             if self._transport:
                 self._transport.close()
                 self._transport = None
                 self._writelines = None
-        elif isinstance(msg_inst, PingRequest):
-            self.send_messages([PingResponse()])
-        elif msgs := self.handle_message(msg_inst):
-            if isinstance(msgs, message.Message):
-                msgs = [msgs]
-            self.send_messages(msgs)
 
     def send_messages(self, msgs: list[message.Message]):
         if self._writelines is None:
