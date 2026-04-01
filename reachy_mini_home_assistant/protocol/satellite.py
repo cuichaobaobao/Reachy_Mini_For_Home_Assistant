@@ -101,6 +101,7 @@ class VoiceSatelliteProtocol(APIServer):
         self._timer_ring_start: float | None = None
         self._pending_voice_request: tuple[str | None, str | None] | None = None
         self._external_wake_words: dict[str, VoiceAssistantExternalWakeWord] = {}
+        self._optional_mappings_loaded = False
 
         # Conversation tracking for continuous conversation
         self._conversation_id: str | None = None
@@ -178,12 +179,6 @@ class VoiceSatelliteProtocol(APIServer):
         # Initialize event-emotion mapper for HA state change reactions
         self._event_emotion_mapper = EventEmotionMapper()
         self._event_emotion_mapper.set_emotion_callback(self._play_emotion)
-        mappings_file = Path(__file__).resolve().parent.parent / "animations" / "event_mappings.json"
-        if mappings_file.exists():
-            try:
-                self._event_emotion_mapper.load_from_json(mappings_file)
-            except Exception as e:
-                _LOGGER.error("Failed to load event mappings from %s: %s", mappings_file, e)
         _LOGGER.info("Event emotion mapper initialized")
 
         # Only setup entities once (check if already initialized)
@@ -249,6 +244,27 @@ class VoiceSatelliteProtocol(APIServer):
             camera_server.set_face_state_callback(self._entity_registry.update_face_detected_state)
             camera_server.set_gesture_action_callback(self.handle_detected_gesture)
         _LOGGER.debug("Camera server reference updated in entity registry")
+
+    def _load_optional_mappings(self) -> None:
+        """Load optional JSON-backed mappings after the ESPHome connection is established."""
+        if self._optional_mappings_loaded:
+            return
+
+        gesture_mappings_file = Path(__file__).resolve().parent.parent / "animations" / "gesture_mappings.json"
+        if gesture_mappings_file.exists():
+            try:
+                self._gesture_action_mapper.load_from_json(gesture_mappings_file)
+            except Exception as e:
+                _LOGGER.error("Failed to load gesture mappings from %s: %s", gesture_mappings_file, e)
+
+        event_mappings_file = Path(__file__).resolve().parent.parent / "animations" / "event_mappings.json"
+        if event_mappings_file.exists():
+            try:
+                self._event_emotion_mapper.load_from_json(event_mappings_file)
+            except Exception as e:
+                _LOGGER.error("Failed to load event mappings from %s: %s", event_mappings_file, e)
+
+        self._optional_mappings_loaded = True
 
     # Note: connection_lost is defined later in the class with full cleanup logic
 
@@ -430,6 +446,8 @@ class VoiceSatelliteProtocol(APIServer):
                 ],
                 max_active_wake_words=2,
             )
+
+            self._load_optional_mappings()
 
             _LOGGER.info("Connected to Home Assistant")
 
