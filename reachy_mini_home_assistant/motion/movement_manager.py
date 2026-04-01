@@ -59,6 +59,7 @@ logger = logging.getLogger(__name__)
 
 # Control loop defaults (actual values come from Config.motion)
 DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 100
+MAX_CONTROL_DT_S = 0.05
 
 # Animation suppression when face detected
 FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
@@ -1066,7 +1067,7 @@ class MovementManager:
 
     def _update_animation(self, dt: float) -> None:
         """Update animation offsets from AnimationPlayer."""
-        dt_safe = max(0.0, dt)
+        dt_safe = max(0.0, min(dt, MAX_CONTROL_DT_S))
         idle_queue_action_active = (
             self.state.robot_state == RobotState.IDLE
             and self.state.look_around_in_progress
@@ -1422,9 +1423,13 @@ class MovementManager:
         else:
             dt = max(1e-6, now - self._last_body_yaw_update)
             max_rate_rad_s = math.radians(Config.motion.body_yaw_max_rate_deg_s)
+            if self.state.face_detected or self.state.robot_state != RobotState.IDLE:
+                max_rate_rad_s *= 1.15
             max_step = max_rate_rad_s * dt
             delta = target_body_yaw - self._body_yaw_smoothed
-            if abs(delta) > Config.motion.body_yaw_deadband_rad:
+            if abs(delta) <= Config.motion.body_yaw_deadband_rad:
+                self._body_yaw_smoothed = target_body_yaw
+            else:
                 step = max(-max_step, min(max_step, delta))
                 self._body_yaw_smoothed = clamp_body_yaw(self._body_yaw_smoothed + step)
             self._last_body_yaw_update = now
@@ -1552,7 +1557,7 @@ class MovementManager:
 
         while not self._stop_event.is_set():
             loop_start = self._now()
-            dt = loop_start - last_time
+            dt = min(max(0.0, loop_start - last_time), MAX_CONTROL_DT_S)
             last_time = loop_start
 
             try:

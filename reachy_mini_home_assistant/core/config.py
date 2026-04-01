@@ -127,8 +127,8 @@ class MotionConfig:
 
     # Smoothing
     default_transition_duration: float = 0.3  # seconds
-    body_yaw_max_rate_deg_s: float = 60.0  # Max body yaw speed when tracking
-    body_yaw_deadband_rad: float = 0.003  # Ignore tiny yaw changes (~0.17°)
+    body_yaw_max_rate_deg_s: float = 85.0  # Faster body follow for smoother head/body coherence
+    body_yaw_deadband_rad: float = 0.0015  # Smaller deadband reduces visible stepwise catch-up
     body_yaw_min_send_interval_s: float = 0.05  # Min interval for yaw updates
 
     # Connection recovery backoff for set_target

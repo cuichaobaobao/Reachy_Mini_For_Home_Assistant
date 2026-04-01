@@ -10,6 +10,12 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 
+def _smoothstep(value: float) -> float:
+    """Return a smooth ease-in-out blend factor in the 0..1 range."""
+    clamped = max(0.0, min(1.0, value))
+    return clamped * clamped * (3.0 - 2.0 * clamped)
+
+
 # Antenna control constants
 ANTENNA_BLEND_DURATION = 0.5  # Seconds to blend back from frozen state
 DEFAULT_ANTENNA_POSITION = 0.0  # Neutral antenna position in radians
@@ -159,7 +165,7 @@ class AntennaController:
             return target_left, target_right
 
         # Blend between frozen and target positions
-        blend = self._blend
+        blend = _smoothstep(self._blend)
         left = self._frozen_left * (1.0 - blend) + target_left * blend
         right = self._frozen_right * (1.0 - blend) + target_right * blend
 
