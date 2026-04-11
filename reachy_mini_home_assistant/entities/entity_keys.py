@@ -17,18 +17,17 @@ ENTITY_KEYS: dict[str, int] = {
     # Phase 1: Basic status and volume (100-199)
     "daemon_state": 100,
     "backend_ready": 101,
+    "mute": 102,
     "speaker_volume": 103,
-    "idle_motion_enabled": 104,
-    "idle_antenna_enabled": 109,
-    "idle_random_actions_enabled": 110,
+    "idle_behavior_enabled": 104,
     "sendspin_enabled": 105,
     "face_tracking_enabled": 106,
     "gesture_detection_enabled": 107,
     "face_confidence_threshold": 108,
+    "camera_disabled": 109,
     # Phase 2: Sleep/wake controls (200-299)
     "motor_mode": 201,
-    "wake_up": 202,
-    "go_to_sleep": 203,
+    "sleep_control": 202,
     # Phase 3: Pose control (300-399)
     "head_x": 300,
     "head_y": 301,
@@ -64,16 +63,9 @@ ENTITY_KEYS: dict[str, int] = {
     "imu_temperature": 706,
     # Phase 8: Emotion selector (800-899)
     "emotion": 800,
-    # Phase 9: Audio controls (900-999)
-    "microphone_volume": 900,
     # Phase 10: Camera (1000-1099)
     "camera_url": 1000,
     "camera": 1001,
-    # Phase 12: Audio processing (1200-1299)
-    "agc_enabled": 1200,
-    "agc_max_gain": 1201,
-    "noise_suppression": 1202,
-    "echo_cancellation_converged": 1203,
     # Phase 21: Continuous conversation (1500-1599)
     "continuous_conversation": 1500,
     # Phase 22: Gesture detection (1600-1699)

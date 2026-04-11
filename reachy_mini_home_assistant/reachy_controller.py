@@ -2,6 +2,7 @@
 
 import logging
 import math
+import threading
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -9,29 +10,12 @@ import numpy as np
 import requests
 from scipy.spatial.transform import Rotation as R
 
-from .audio.microphone import MicrophoneOptimizer, MicrophonePreferences
 from .core.config import Config
 
 if TYPE_CHECKING:
     from reachy_mini import ReachyMini
 
 logger = logging.getLogger(__name__)
-
-
-class _ReSpeakerContext:
-    """Context manager for thread-safe ReSpeaker access."""
-
-    def __init__(self, respeaker, lock):
-        self._respeaker = respeaker
-        self._lock = lock
-
-    def __enter__(self):
-        self._lock.acquire()
-        return self._respeaker
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._lock.release()
-        return False
 
 
 class ReachyController:
@@ -50,23 +34,19 @@ class ReachyController:
         """
         self.reachy = reachy_mini
         self._speaker_volume = 100  # Default volume
-        self._microphone_volume = 50.0  # Default mic volume
         self._movement_manager = None  # Set later via set_movement_manager()
-
-        # Volume caching to reduce daemon HTTP load
-        self._volume_cache_ttl = Config.daemon.volume_cache_ttl  # seconds
-        self._speaker_volume_cache_ts = 0.0
-        self._microphone_volume_cache_ts = 0.0
 
         # Shared session to reduce per-request overhead
         self._http_session = requests.Session()
         self._http_timeout = 5.0  # seconds
         self._cache_ttl = Config.daemon.status_cache_ttl
-        self._daemon_base_url = "http://127.0.0.1:8000"
+        self._daemon_base_url = Config.daemon.url.rstrip("/")
 
         # Callback for sleep/wake to notify VoiceAssistant
         self._on_sleep_callback = None
         self._on_wake_callback = None
+        self._sleep_transition_lock = threading.Lock()
+        self._sleep_transition_thread: threading.Thread | None = None
 
         # Status caching - only for get_status() which may trigger I/O
         # Note: get_current_head_pose() and get_current_joint_positions() are
@@ -74,8 +54,9 @@ class ReachyController:
         self._state_cache: dict[str, Any] = {}
         self._last_status_query = 0.0
 
-        # Thread lock for ReSpeaker USB access to prevent conflicts with GStreamer audio pipeline
-        self._respeaker_lock = __import__("threading").Lock()
+        self._look_at_x = 0.0
+        self._look_at_y = 0.0
+        self._look_at_z = 0.0
 
     def set_sleep_callback(self, callback) -> None:
         """Set callback to be called when go_to_sleep is triggered."""
@@ -99,73 +80,31 @@ class ReachyController:
         """Check if robot is available."""
         return self.reachy is not None
 
-    def get_idle_motion_enabled(self) -> bool:
-        """Get whether idle look-around behavior is enabled."""
+    def _with_movement_manager(self, caller: str):
         if self._movement_manager is None:
+            logger.warning("%s failed - MovementManager not set", caller)
+            return None
+        return self._movement_manager
+
+    def _get_movement_bool(self, getter_name: str, log_label: str) -> bool:
+        movement_manager = self._movement_manager
+        if movement_manager is None:
             return False
         try:
-            return bool(self._movement_manager.get_idle_motion_enabled())
+            return bool(getattr(movement_manager, getter_name)())
         except Exception as e:
-            logger.debug("Error getting idle motion state: %s", e)
+            logger.debug("Error getting %s state: %s", log_label, e)
             return False
 
     def get_idle_behavior_enabled(self) -> bool:
         """Get whether any idle behavior subsystem is enabled."""
-        if self._movement_manager is None:
-            return False
-        try:
-            return bool(self._movement_manager.get_idle_behavior_enabled())
-        except Exception as e:
-            logger.debug("Error getting idle behavior state: %s", e)
-            return False
+        return self._get_movement_bool("get_idle_behavior_enabled", "idle behavior")
 
     def set_idle_behavior_enabled(self, enabled: bool) -> None:
         """Enable or disable all idle behavior subsystems together."""
-        if self._movement_manager is None:
-            logger.warning("set_idle_behavior_enabled failed - MovementManager not set")
-            return
-        self._movement_manager.set_idle_behavior_enabled(enabled)
-
-    def set_idle_motion_enabled(self, enabled: bool) -> None:
-        """Enable or disable idle look-around behavior."""
-        if self._movement_manager is None:
-            logger.warning("set_idle_motion_enabled failed - MovementManager not set")
-            return
-        self._movement_manager.set_idle_motion_enabled(enabled)
-
-    def get_idle_antenna_enabled(self) -> bool:
-        """Get whether idle antenna animation is enabled."""
-        if self._movement_manager is None:
-            return False
-        try:
-            return bool(self._movement_manager.get_idle_antenna_enabled())
-        except Exception as e:
-            logger.debug("Error getting idle antenna state: %s", e)
-            return False
-
-    def set_idle_antenna_enabled(self, enabled: bool) -> None:
-        """Enable or disable idle antenna animation."""
-        if self._movement_manager is None:
-            logger.warning("set_idle_antenna_enabled failed - MovementManager not set")
-            return
-        self._movement_manager.set_idle_antenna_enabled(enabled)
-
-    def get_idle_random_actions_enabled(self) -> bool:
-        """Get whether idle random actions are enabled."""
-        if self._movement_manager is None:
-            return False
-        try:
-            return bool(self._movement_manager.get_idle_random_actions_enabled())
-        except Exception as e:
-            logger.debug("Error getting idle random actions state: %s", e)
-            return False
-
-    def set_idle_random_actions_enabled(self, enabled: bool) -> None:
-        """Enable or disable idle random actions (no audio)."""
-        if self._movement_manager is None:
-            logger.warning("set_idle_random_actions_enabled failed - MovementManager not set")
-            return
-        self._movement_manager.set_idle_random_actions_enabled(enabled)
+        movement_manager = self._with_movement_manager("set_idle_behavior_enabled")
+        if movement_manager is not None:
+            movement_manager.set_idle_behavior_enabled(enabled)
 
     # ========== Phase 1: Basic Status & Volume ==========
 
@@ -207,7 +146,7 @@ class ReachyController:
             return status
         except Exception as e:
             logger.error(f"Error getting status: {e}")
-            return self._state_cache.get("status")  # Return stale cache on error
+            return None
 
     def get_daemon_state(self) -> str:
         """Get daemon state with caching."""
@@ -263,6 +202,12 @@ class ReachyController:
             logger.error("Failed to set %s volume via daemon API: %s", label, e)
             return volume
 
+    def _motor_mode_from_status(self, status: Any) -> str | None:
+        motor_mode = self._nested_status_value(status, "backend_status", "motor_control_mode", None)
+        if motor_mode is not None:
+            return str(motor_mode)
+        return None
+
     def get_speaker_volume(self) -> float:
         """Get speaker volume (0-100) from the daemon volume API."""
         self._speaker_volume = self._get_volume_via_api("/api/volume/current", self._speaker_volume, "speaker")
@@ -274,30 +219,6 @@ class ReachyController:
         self._speaker_volume = self._set_volume_via_api("/api/volume/set", volume, "speaker")
         logger.info("Speaker volume set to %.1f%% via daemon API", self._speaker_volume)
 
-    def get_microphone_volume(self) -> float:
-        """Get microphone volume (0-100), preferring daemon volume API."""
-        self._microphone_volume = self._get_volume_via_api(
-            "/api/volume/microphone/current",
-            self._microphone_volume,
-            "microphone",
-        )
-        return self._microphone_volume
-
-    def set_microphone_volume(self, volume: float) -> None:
-        """
-        Set microphone volume (0-100), preferring daemon volume API.
-
-        Args:
-            volume: Volume level 0-100
-        """
-        volume = max(0.0, min(100.0, volume))
-        self._microphone_volume = self._set_volume_via_api(
-            "/api/volume/microphone/set",
-            volume,
-            "microphone",
-        )
-        logger.info("Microphone volume set to %.1f%% via daemon API", self._microphone_volume)
-
     # ========== Phase 2: Motor Control ==========
 
     def get_motors_enabled(self) -> bool:
@@ -306,10 +227,8 @@ class ReachyController:
         if status is None:
             return False
         try:
-            motor_mode = self._nested_status_value(status, "backend_status", "motor_control_mode", None)
-            if motor_mode is not None:
-                return motor_mode == "enabled"
-            return self._status_value(status, "state") == "running"
+            motor_mode = self._motor_mode_from_status(status)
+            return motor_mode == "enabled"
         except Exception as e:
             logger.error(f"Error getting motor state: {e}")
             return False
@@ -341,12 +260,7 @@ class ReachyController:
         if status is None:
             return "disabled"
         try:
-            motor_mode = self._nested_status_value(status, "backend_status", "motor_control_mode", None)
-            if motor_mode is not None:
-                return str(motor_mode)
-            if self._status_value(status, "state") == "running":
-                return "enabled"
-            return "disabled"
+            return self._motor_mode_from_status(status) or "disabled"
         except Exception as e:
             logger.error(f"Error getting motor mode: {e}")
             return "error"
@@ -436,6 +350,45 @@ class ReachyController:
 
         except Exception as e:
             logger.error(f"Error executing sleep: {e}")
+
+    def get_doa_enabled(self) -> bool:
+        """Get whether DOA sound tracking is enabled."""
+        return self._get_movement_bool("get_doa_enabled", "DOA tracking")
+
+    def set_doa_enabled(self, enabled: bool) -> None:
+        """Enable or disable DOA sound tracking."""
+        movement_manager = self._with_movement_manager("set_doa_enabled")
+        if movement_manager is not None:
+            movement_manager.set_doa_enabled(enabled)
+
+    def request_sleep_state(self, sleeping: bool) -> bool:
+        """Execute sleep/wake transitions in a background thread.
+
+        Returns True when a transition was started.
+        """
+
+        def _run_transition() -> None:
+            try:
+                if sleeping:
+                    self.go_to_sleep()
+                else:
+                    self.wake_up()
+            finally:
+                with self._sleep_transition_lock:
+                    self._sleep_transition_thread = None
+
+        with self._sleep_transition_lock:
+            if self._sleep_transition_thread is not None and self._sleep_transition_thread.is_alive():
+                logger.info("Sleep transition already in progress")
+                return False
+
+            self._sleep_transition_thread = threading.Thread(
+                target=_run_transition,
+                name="reachy-sleep-transition",
+                daemon=True,
+            )
+            self._sleep_transition_thread.start()
+            return True
 
     def _daemon_command(self, path: str, params: dict[str, str] | None = None) -> None:
         """Send a daemon command request and wait for the daemon state to settle."""
@@ -689,9 +642,7 @@ class ReachyController:
 
     def get_look_at_x(self) -> float:
         """Get look at target X coordinate in world frame (meters)."""
-        # This is a target position, not a current state
-        # We'll store it internally
-        return getattr(self, "_look_at_x", 0.0)
+        return self._look_at_x
 
     def set_look_at_x(self, x: float) -> None:
         """Set look at target X coordinate."""
@@ -700,7 +651,7 @@ class ReachyController:
 
     def get_look_at_y(self) -> float:
         """Get look at target Y coordinate in world frame (meters)."""
-        return getattr(self, "_look_at_y", 0.0)
+        return self._look_at_y
 
     def set_look_at_y(self, y: float) -> None:
         """Set look at target Y coordinate."""
@@ -709,7 +660,7 @@ class ReachyController:
 
     def get_look_at_z(self) -> float:
         """Get look at target Z coordinate in world frame (meters)."""
-        return getattr(self, "_look_at_z", 0.0)
+        return self._look_at_z
 
     def set_look_at_z(self, z: float) -> None:
         """Set look at target Z coordinate."""
@@ -842,148 +793,6 @@ class ReachyController:
     # LED control is disabled because LEDs are hidden inside the robot.
     # See PROJECT_PLAN.md principle 8.
 
-    def _get_respeaker(self):
-        """Get ReSpeaker device from media manager with thread-safe access.
-
-        Returns a context manager that holds the lock during ReSpeaker operations.
-        Usage:
-            with self._get_respeaker() as respeaker:
-                if respeaker:
-                    respeaker.read("...")
-
-        Note: This accesses the private _respeaker attribute from the SDK.
-        TODO: Check if SDK provides a public API for ReSpeaker access in future versions.
-        This is a known compatibility risk and should be reviewed on SDK updates.
-        """
-        if not self.is_available:
-            return _ReSpeakerContext(None, self._respeaker_lock)
-        try:
-            if not self.reachy.media or not self.reachy.media.audio:
-                return _ReSpeakerContext(None, self._respeaker_lock)
-            # WARNING: Accessing private attribute _respeaker
-            # TODO: Replace with public API when available
-            respeaker = self.reachy.media.audio._respeaker
-            return _ReSpeakerContext(respeaker, self._respeaker_lock)
-        except Exception:
-            return _ReSpeakerContext(None, self._respeaker_lock)
-
-    def optimize_microphone_settings(self, preferences: MicrophonePreferences) -> None:
-        """Apply microphone optimization through the centralized ReSpeaker adapter."""
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                logger.debug("ReSpeaker not available for optimization")
-                return
-            optimizer = MicrophoneOptimizer()
-            optimizer.optimize(respeaker, preferences)
-
-    # ========== Phase 12: Audio Processing (via local SDK with thread-safe access) ==========
-
-    def get_agc_enabled(self) -> bool:
-        """Get AGC (Automatic Gain Control) enabled status."""
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return getattr(self, "_agc_enabled", True)  # Default to enabled
-            try:
-                result = respeaker.read("PP_AGCONOFF")
-                if result is not None:
-                    self._agc_enabled = bool(result[1])
-                    return self._agc_enabled
-            except Exception as e:
-                logger.debug(f"Error getting AGC status: {e}")
-        return getattr(self, "_agc_enabled", True)
-
-    def set_agc_enabled(self, enabled: bool) -> None:
-        """Set AGC (Automatic Gain Control) enabled status."""
-        self._agc_enabled = enabled
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return
-            try:
-                respeaker.write("PP_AGCONOFF", [1 if enabled else 0])
-                logger.info(f"AGC {'enabled' if enabled else 'disabled'}")
-            except Exception as e:
-                logger.error(f"Error setting AGC status: {e}")
-
-    def get_agc_max_gain(self) -> float:
-        """Get AGC maximum gain in dB (0-40 dB range)."""
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return getattr(self, "_agc_max_gain", 30.0)  # Default matches MicrophoneDefaults
-            try:
-                result = respeaker.read("PP_AGCMAXGAIN")
-                if result is not None:
-                    self._agc_max_gain = float(result[0])
-                    return self._agc_max_gain
-            except Exception as e:
-                logger.debug(f"Error getting AGC max gain: {e}")
-        return getattr(self, "_agc_max_gain", 30.0)
-
-    def set_agc_max_gain(self, gain: float) -> None:
-        """Set AGC maximum gain in dB (0-40 dB range)."""
-        gain = max(0.0, min(40.0, gain))  # XVF3800 supports up to 40dB
-        self._agc_max_gain = gain
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return
-            try:
-                respeaker.write("PP_AGCMAXGAIN", [gain])
-                logger.info(f"AGC max gain set to {gain} dB")
-            except Exception as e:
-                logger.error(f"Error setting AGC max gain: {e}")
-
-    def get_noise_suppression(self) -> float:
-        """Get noise suppression level (0-100%).
-
-        PP_MIN_NS represents "minimum signal preservation ratio":
-        - PP_MIN_NS = 0.85 means "keep at least 85% of signal" = 15% suppression
-        - PP_MIN_NS = 0.15 means "keep at least 15% of signal" = 85% suppression
-
-        We display "noise suppression strength" to user, so:
-        - suppression_percent = (1.0 - PP_MIN_NS) * 100
-        """
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return getattr(self, "_noise_suppression", 15.0)
-            try:
-                result = respeaker.read("PP_MIN_NS")
-                if result is not None:
-                    raw_value = result[0]
-                    # Convert: PP_MIN_NS=0.85 -> 15% suppression, PP_MIN_NS=0.15 -> 85% suppression
-                    self._noise_suppression = max(0.0, min(100.0, (1.0 - raw_value) * 100.0))
-                    logger.debug(f"Noise suppression: PP_MIN_NS={raw_value:.2f} -> {self._noise_suppression:.1f}%")
-                    return self._noise_suppression
-            except Exception as e:
-                logger.debug(f"Error getting noise suppression: {e}")
-        return getattr(self, "_noise_suppression", 15.0)
-
-    def set_noise_suppression(self, level: float) -> None:
-        """Set noise suppression level (0-100%)."""
-        level = max(0.0, min(100.0, level))
-        self._noise_suppression = level
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return
-            try:
-                # Convert percentage to PP_MIN_NS value (inverted)
-                value = 1.0 - (level / 100.0)
-                respeaker.write("PP_MIN_NS", [value])
-                logger.info(f"Noise suppression set to {level}%")
-            except Exception as e:
-                logger.error(f"Error setting noise suppression: {e}")
-
-    def get_echo_cancellation_converged(self) -> bool:
-        """Check if echo cancellation has converged."""
-        with self._get_respeaker() as respeaker:
-            if respeaker is None:
-                return False
-            try:
-                result = respeaker.read("AEC_AECCONVERGED")
-                if result is not None:
-                    return bool(result[1])
-            except Exception as e:
-                logger.debug(f"Error getting AEC converged status: {e}")
-        return False
-
     # ========== DOA (Direction of Arrival) ==========
 
     def get_doa_angle(self) -> tuple[float, bool] | None:
@@ -1000,8 +809,7 @@ class ReachyController:
         if not self.is_available:
             return None
         try:
-            if self.reachy.media and hasattr(self.reachy.media, "get_DoA"):
-                return self.reachy.media.get_DoA()
+            return self.reachy.media.get_DoA()
         except Exception as e:
             logger.debug(f"Error getting DOA: {e}")
         return None

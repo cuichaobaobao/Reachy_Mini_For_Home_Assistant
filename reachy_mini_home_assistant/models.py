@@ -53,18 +53,10 @@ class AvailableWakeWord:
 @dataclass
 class Preferences:
     active_wake_words: list[str] = field(default_factory=list)
-    # Audio processing settings (persisted from Home Assistant)
-    agc_enabled: bool | None = None  # None = use hardware default
-    agc_max_gain: float | None = None  # None = use hardware default
-    noise_suppression: float | None = None  # None = use hardware default
     # Continuous conversation mode (controlled from Home Assistant)
     continuous_conversation: bool = False
-    # Idle motion behavior toggle (controlled from Home Assistant)
-    idle_motion_enabled: bool = False
-    # Idle antenna animation toggle (controlled from Home Assistant)
-    idle_antenna_enabled: bool = False
-    # Idle random actions toggle (pure motion, no audio)
-    idle_random_actions_enabled: bool = False
+    # Unified idle behavior toggle (controlled from Home Assistant)
+    idle_behavior_enabled: bool = False
     # Sendspin discovery and playback toggle (controlled from Home Assistant)
     sendspin_enabled: bool = False
     # Vision toggles and parameters (controlled from Home Assistant)
@@ -72,16 +64,9 @@ class Preferences:
     gesture_detection_enabled: bool = False
     face_confidence_threshold: float = 0.5
 
-    @property
-    def idle_behavior_enabled(self) -> bool:
-        """Whether any idle behavior feature is enabled."""
-        return self.idle_motion_enabled or self.idle_antenna_enabled or self.idle_random_actions_enabled
-
     def set_idle_behavior_enabled(self, enabled: bool) -> None:
-        """Keep all idle behavior toggles aligned behind one user-facing switch."""
-        self.idle_motion_enabled = enabled
-        self.idle_antenna_enabled = enabled
-        self.idle_random_actions_enabled = enabled
+        """Update the unified idle behavior toggle."""
+        self.idle_behavior_enabled = enabled
 
 
 @dataclass
@@ -113,6 +98,8 @@ class ServerState:
     satellite: "VoiceSatelliteProtocol | None" = None
     wake_words_changed: bool = False
     refractory_seconds: float = 2.0
+    timer_max_ring_seconds: float = 900.0
+    _entities_initialized: bool = False
 
     # Sleep state (updated by SleepManager) - thread-safe via properties
     _is_sleeping: bool = False

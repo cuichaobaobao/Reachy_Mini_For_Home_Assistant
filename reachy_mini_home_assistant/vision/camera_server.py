@@ -20,6 +20,7 @@ import cv2
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
+from ..core.config import Config
 from .face_tracking_interpolator import FaceTrackingInterpolator, InterpolationConfig
 
 # Import adaptive frame rate manager
@@ -33,7 +34,7 @@ _LOGGER = logging.getLogger(__name__)
 # MJPEG boundary string
 MJPEG_BOUNDARY = "frame"
 GESTURE_MIN_FPS = 12.0
-FACE_TRACKING_MIN_FPS = 15.0
+FACE_TRACKING_TARGET_FPS = 25.0
 
 
 class MJPEGCameraServer:
@@ -103,6 +104,7 @@ class MJPEGCameraServer:
         self._face_tracking_enabled = enable_face_tracking
         self._face_tracking_offsets: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         self._face_tracking_lock = threading.Lock()
+        self._next_face_tracking_time = 0.0
 
         # Gesture detection state
         self._gesture_detector = None
@@ -139,7 +141,7 @@ class MJPEGCameraServer:
                 fps_idle=0.5,
                 low_power_threshold=5.0,
                 idle_threshold=30.0,
-                gesture_detection_interval=2,
+                gesture_detection_interval=Config.camera.gesture_detection_interval,
             )
         )
 
@@ -181,10 +183,22 @@ class MJPEGCameraServer:
             self._gesture_detection_enabled = False
             return False
 
+    def _get_media_camera(self):
+        """Return the SDK camera object when video is available."""
+        return self.reachy_mini.media.camera
+
+    def _camera_ready(self) -> bool:
+        """Whether the SDK reports a usable camera backend."""
+        return self._get_media_camera() is not None
+
     async def start(self) -> None:
         """Start the MJPEG camera server."""
         if self._running:
             _LOGGER.warning("Camera server already running")
+            return
+
+        if not self._camera_ready():
+            _LOGGER.warning("Camera server not started: SDK media camera is unavailable")
             return
 
         self._running = True
@@ -195,9 +209,14 @@ class MJPEGCameraServer:
 
             backend = self.reachy_mini.media.backend
             backend_name = {
+                MediaBackend.NO_MEDIA: "No Media",
                 MediaBackend.GSTREAMER: "GStreamer",
+                MediaBackend.GSTREAMER_NO_VIDEO: "GStreamer (No Video)",
                 MediaBackend.DEFAULT: "Default",
                 MediaBackend.DEFAULT_NO_VIDEO: "Default (No Video)",
+                MediaBackend.SOUNDDEVICE_OPENCV: "SoundDevice + OpenCV",
+                MediaBackend.SOUNDDEVICE_NO_VIDEO: "SoundDevice (No Video)",
+                MediaBackend.WEBRTC: "WebRTC",
             }.get(backend, str(backend))
             _LOGGER.info("Detected media backend: %s", backend_name)
         except ImportError:
@@ -445,9 +464,15 @@ class MJPEGCameraServer:
         while self._running:
             try:
                 current_time = time.time()
+                loop_time = time.monotonic()
 
                 # Determine if we should run AI inference this frame
                 should_run_ai = self._should_run_ai_inference(current_time)
+                should_run_face_tracking = (
+                    self._face_tracking_enabled
+                    and self._head_tracker is not None
+                    and loop_time >= self._next_face_tracking_time
+                )
                 should_run_gesture = (
                     self._gesture_detection_enabled
                     and self._gesture_detector is not None
@@ -457,7 +482,7 @@ class MJPEGCameraServer:
                 # Only get frame if needed (AI inference, gesture detection, or MJPEG streaming)
                 frame = (
                     self._get_camera_frame()
-                    if should_run_ai or should_run_gesture or self._has_stream_clients()
+                    if should_run_ai or should_run_face_tracking or should_run_gesture or self._has_stream_clients()
                     else None
                 )
 
@@ -474,11 +499,12 @@ class MJPEGCameraServer:
                             self._last_frame_time = time.time()
 
                     # Only run AI inference when enabled
-                    if should_run_ai:
+                    if should_run_ai or should_run_face_tracking:
                         # Face tracking
-                        if self._face_tracking_enabled and self._head_tracker is not None:
+                        if should_run_face_tracking:
                             face_detect_count += 1
                             face_detected = self._process_face_tracking(frame, current_time)
+                            self._next_face_tracking_time = time.monotonic() + (1.0 / FACE_TRACKING_TARGET_FPS)
 
                             # Update adaptive frame rate manager
                             self._frame_rate_manager.update(face_detected=face_detected)
@@ -497,8 +523,8 @@ class MJPEGCameraServer:
                         # Handle smooth interpolation when face lost
                         self._process_face_lost_interpolation(current_time)
 
-                    # Gesture detection (runs independently of face detection)
-                    # Reuse precomputed gate to avoid consuming the gesture counter twice.
+                    # Gesture detection runs on the current frame regardless of
+                    # whether face tracking was scheduled this iteration.
                     if self._gesture_detection_enabled and self._gesture_detector is not None and should_run_gesture:
                         self._process_gesture_detection(frame)
 
@@ -515,11 +541,14 @@ class MJPEGCameraServer:
                         face_detect_count = 0
                         last_log_time = current_time
 
+                elif self._face_tracking_enabled and self._head_tracker is not None:
+                    self._process_face_lost_interpolation(current_time)
+
                 # Sleep to maintain target FPS (use adaptive rate)
                 # Keep a minimum processing cadence for gesture responsiveness.
                 sleep_time = self._frame_rate_manager.get_sleep_interval()
                 if self._face_tracking_enabled and self._head_tracker is not None:
-                    sleep_time = min(sleep_time, 1.0 / FACE_TRACKING_MIN_FPS)
+                    sleep_time = min(sleep_time, 1.0 / FACE_TRACKING_TARGET_FPS)
                 if self._gesture_detection_enabled and self._gesture_detector is not None:
                     sleep_time = min(sleep_time, 1.0 / GESTURE_MIN_FPS)
                 time.sleep(sleep_time)
@@ -581,15 +610,13 @@ class MJPEGCameraServer:
                 h, w = frame.shape[:2]
                 eye_center_norm = (face_center + 1) / 2
 
-                eye_center_pixels = [
-                    float(eye_center_norm[0] * w),
-                    float(eye_center_norm[1] * h),
-                ]
+                u = int(np.clip(round(float(eye_center_norm[0] * w)), 1, max(1, w - 1)))
+                v = int(np.clip(round(float(eye_center_norm[1] * h)), 1, max(1, h - 1)))
 
                 # Get the head pose needed to look at the target
                 target_pose = self.reachy_mini.look_at_image(
-                    eye_center_pixels[0],
-                    eye_center_pixels[1],
+                    u,
+                    v,
                     duration=0.0,
                     perform_movement=False,
                 )
@@ -664,6 +691,7 @@ class MJPEGCameraServer:
             return  # No change, skip logging
         self._face_tracking_requested = enabled
         self._face_tracking_enabled = enabled
+        self._next_face_tracking_time = 0.0
         if enabled:
             # Ensure AI scheduler is active when user re-enables tracking from HA switch.
             self._frame_rate_manager.resume()
@@ -820,6 +848,9 @@ class MJPEGCameraServer:
 
     def _get_camera_frame(self) -> np.ndarray | None:
         """Get a frame from Reachy Mini's camera."""
+        if not self._camera_ready():
+            return None
+
         try:
             # Use GStreamer lock to prevent concurrent access conflicts
             acquired = self._gstreamer_lock.acquire(timeout=0.05)

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Voice Assistant Service for Reachy Mini.
 
@@ -11,7 +13,7 @@ import logging
 import threading
 import time
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from queue import Queue
 from typing import TYPE_CHECKING
@@ -21,14 +23,12 @@ import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
-from .audio.microphone import MicrophonePreferences
 from .core import Config, SleepManager
 from .core.util import get_mac
 from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
 from .motion.reachy_motion import ReachyMiniMotion
 from .protocol.satellite import VoiceSatelliteProtocol
 from .protocol.zeroconf import HomeAssistantZeroconf, get_default_friendly_name
-from .reachy_controller import ReachyController
 from .vision.camera_server import MJPEGCameraServer
 
 if TYPE_CHECKING:
@@ -219,8 +219,6 @@ class VoiceAssistantService:
                 # Body yaw now follows head yaw in movement_manager.py
                 # This enables natural body rotation when tracking faces
 
-                # Optimize microphone settings for voice recognition
-                self._optimize_microphone_settings()
         except Exception as e:
             _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
 
@@ -240,12 +238,17 @@ class VoiceAssistantService:
         camera_server = self._camera_server  # Capture for lambda
 
         def protocol_factory():
-            protocol = VoiceSatelliteProtocol(self._state, camera_server=camera_server, voice_assistant_service=self)
-            # Set HA connection callbacks
-            protocol.set_ha_connection_callbacks(
-                on_connected=self._on_ha_connected, on_disconnected=self._on_ha_disconnected
-            )
-            return protocol
+            try:
+                protocol = VoiceSatelliteProtocol(
+                    self._state, camera_server=camera_server, voice_assistant_service=self
+                )
+                protocol.set_ha_connection_callbacks(
+                    on_connected=self._on_ha_connected, on_disconnected=self._on_ha_disconnected
+                )
+                return protocol
+            except Exception:
+                _LOGGER.exception("Failed to initialize ESPHome protocol connection")
+                raise
 
         self._server = await loop.create_server(
             protocol_factory,
@@ -328,121 +331,38 @@ class VoiceAssistantService:
         return False
 
     def _suspend_voice_services(self, reason: str) -> None:
-        """Suspend only voice-related services (not camera or motion).
-
-        This is used for the Mute feature - camera and motion should remain active.
-        """
+        """Suspend only voice-related services."""
         _LOGGER.warning("Suspending voice services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
-
-        # Update state
-        if self._state is not None:
-            self._state.services_suspended = True
-
-        # Clear audio buffer to avoid processing stale data
+        self._set_service_state(suspended=True)
         self._audio_buffer.clear()
-
-        # Suspend satellite (stops TTS, music, wake word processing)
-        if self._state is not None and self._state.satellite is not None:
-            try:
-                self._state.satellite.suspend()
-                _LOGGER.debug("Satellite suspended")
-            except Exception as e:
-                _LOGGER.warning("Error suspending satellite: %s", e)
-
-        # Suspend audio players
-        if self._state is not None:
-            if self._state.tts_player is not None:
-                try:
-                    self._state.tts_player.suspend()
-                except Exception as e:
-                    _LOGGER.warning("Error suspending TTS player: %s", e)
-            if self._state.music_player is not None:
-                try:
-                    self._state.music_player.suspend()
-                except Exception as e:
-                    _LOGGER.warning("Error suspending music player: %s", e)
-
-        # Stop media recording to save CPU
-        try:
-            self.reachy_mini.media.stop_recording()
-            self.reachy_mini.media.stop_playing()
-            _LOGGER.debug("Media system stopped")
-        except Exception as e:
-            _LOGGER.warning("Error stopping media: %s", e)
+        self._suspend_satellite()
+        self._set_audio_players_suspended(True)
+        self._stop_media_system()
 
         _LOGGER.info("Voice services suspended - camera and motion remain active")
 
     def _resume_voice_services(self, reason: str) -> None:
-        """Resume only voice-related services (not camera or motion).
-
-        This is used for the Mute feature - camera and motion remain active.
-        """
+        """Resume only voice-related services."""
         _LOGGER.info("Resuming voice services (%s)", reason)
         self._robot_services_paused.clear()
-
-        # Update state
-        if self._state is not None:
-            self._state.services_suspended = False
-
-        # Restart media system first
-        try:
-            media = self.reachy_mini.media
-            if media.audio is not None:
-                media.start_recording()
-                media.start_playing()
-                _LOGGER.info("Media system restarted")
-        except Exception as e:
-            _LOGGER.warning("Failed to restart media: %s", e)
-
-        # Resume satellite
-        if self._state is not None and self._state.satellite is not None:
-            try:
-                self._state.satellite.resume()
-                _LOGGER.debug("Satellite resumed")
-            except Exception as e:
-                _LOGGER.warning("Error resuming satellite: %s", e)
-
-        # Resume audio players
-        if self._state is not None:
-            if self._state.tts_player is not None:
-                try:
-                    self._state.tts_player.resume()
-                except Exception as e:
-                    _LOGGER.warning("Error resuming TTS player: %s", e)
-            if self._state.music_player is not None:
-                try:
-                    self._state.music_player.resume()
-                except Exception as e:
-                    _LOGGER.warning("Error resuming music player: %s", e)
-
-        # Signal waiting threads that services are resumed
+        self._set_service_state(suspended=False)
+        self._start_media_system()
+        self._resume_satellite()
+        self._set_audio_players_suspended(False)
         self._robot_services_resumed.set()
 
         _LOGGER.info("Voice services resumed - camera and motion remained active")
 
     def _suspend_non_esphome_services(self, reason: str, set_sleep_state: bool) -> None:
-        """Suspend all non-ESPHome services to reduce load.
-
-        ESPHome server stays up so Home Assistant can wake the robot.
-        """
+        """Suspend all non-ESPHome services."""
         _LOGGER.warning("Suspending non-ESPHome services (%s)", reason)
         self._robot_services_paused.set()
         self._robot_services_resumed.clear()
-
-        # Update state
-        if self._state is not None:
-            if set_sleep_state:
-                self._state.is_sleeping = True
-            self._state.services_suspended = True
-
-        # Clear audio buffer to avoid processing stale data
+        self._set_service_state(suspended=True, sleeping=set_sleep_state)
         self._audio_buffer.clear()
 
-        # Suspend camera server (stops thread and releases YOLO model)
-        # Only suspend if camera is NOT disabled (user has not manually disabled it)
-        # AND camera server has been started (not None)
         if self._camera_server is not None and self._state.camera_enabled:
             try:
                 self._camera_server.suspend()
@@ -450,7 +370,6 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Error suspending camera: %s", e)
 
-        # Suspend motion controller (stops control loop thread)
         if self._motion is not None and self._motion._movement_manager is not None:
             try:
                 self._motion._movement_manager.suspend()
@@ -458,34 +377,9 @@ class VoiceAssistantService:
             except Exception as e:
                 _LOGGER.warning("Error suspending motion: %s", e)
 
-        # Suspend satellite
-        if self._state is not None and self._state.satellite is not None:
-            try:
-                self._state.satellite.suspend()
-                _LOGGER.debug("Satellite suspended")
-            except Exception as e:
-                _LOGGER.warning("Error suspending satellite: %s", e)
-
-        # Suspend audio players
-        if self._state is not None:
-            if self._state.tts_player is not None:
-                try:
-                    self._state.tts_player.suspend()
-                except Exception as e:
-                    _LOGGER.warning("Error suspending TTS player: %s", e)
-            if self._state.music_player is not None:
-                try:
-                    self._state.music_player.suspend()
-                except Exception as e:
-                    _LOGGER.warning("Error suspending music player: %s", e)
-
-        # Stop media recording to save CPU
-        try:
-            self.reachy_mini.media.stop_recording()
-            self.reachy_mini.media.stop_playing()
-            _LOGGER.debug("Media system stopped")
-        except Exception as e:
-            _LOGGER.warning("Error stopping media: %s", e)
+        self._suspend_satellite()
+        self._set_audio_players_suspended(True)
+        self._stop_media_system()
 
         _LOGGER.info("Services suspended - ESPHome only")
 
@@ -493,14 +387,77 @@ class VoiceAssistantService:
         """Resume all non-ESPHome services after sleep/disconnect."""
         _LOGGER.info("Resuming non-ESPHome services (%s)", reason)
         self._robot_services_paused.clear()
+        self._set_service_state(suspended=False, sleeping=False if clear_sleep_state else None)
+        self._start_media_system()
 
-        # Update state
-        if self._state is not None:
-            if clear_sleep_state:
-                self._state.is_sleeping = False
-            self._state.services_suspended = False
+        if self._camera_server is not None and self._state.camera_enabled:
+            try:
+                self._camera_server.resume_from_suspend()
+                _LOGGER.debug("Camera server resumed from suspend")
+            except Exception as e:
+                _LOGGER.warning("Error resuming camera: %s", e)
 
-        # Restart media system first
+        if self._motion is not None and self._motion._movement_manager is not None:
+            try:
+                self._motion._movement_manager.resume_from_suspend()
+                _LOGGER.debug("Motion controller resumed from suspend")
+            except Exception as e:
+                _LOGGER.warning("Error resuming motion: %s", e)
+
+        self._resume_satellite()
+        self._set_audio_players_suspended(False)
+        self._robot_services_resumed.set()
+
+        _LOGGER.info("All services resumed - system fully operational")
+
+    def _set_service_state(self, *, suspended: bool, sleeping: bool | None = None) -> None:
+        if self._state is None:
+            return
+        if sleeping is not None:
+            self._state.is_sleeping = sleeping
+        self._state.services_suspended = suspended
+
+    def _suspend_satellite(self) -> None:
+        if self._state is None or self._state.satellite is None:
+            return
+        try:
+            self._state.satellite.suspend()
+            _LOGGER.debug("Satellite suspended")
+        except Exception as e:
+            _LOGGER.warning("Error suspending satellite: %s", e)
+
+    def _resume_satellite(self) -> None:
+        if self._state is None or self._state.satellite is None:
+            return
+        try:
+            self._state.satellite.resume()
+            _LOGGER.debug("Satellite resumed")
+        except Exception as e:
+            _LOGGER.warning("Error resuming satellite: %s", e)
+
+    def _set_audio_players_suspended(self, suspended: bool) -> None:
+        if self._state is None:
+            return
+        action = "suspend" if suspended else "resume"
+        verb = "suspending" if suspended else "resuming"
+        for player_name, label in (("tts_player", "TTS player"), ("music_player", "music player")):
+            player = getattr(self._state, player_name)
+            if player is None:
+                continue
+            try:
+                getattr(player, action)()
+            except Exception as e:
+                _LOGGER.warning("Error %s %s: %s", verb, label, e)
+
+    def _stop_media_system(self) -> None:
+        try:
+            self.reachy_mini.media.stop_recording()
+            self.reachy_mini.media.stop_playing()
+            _LOGGER.debug("Media system stopped")
+        except Exception as e:
+            _LOGGER.warning("Error stopping media: %s", e)
+
+    def _start_media_system(self) -> None:
         try:
             media = self.reachy_mini.media
             if media.audio is not None:
@@ -510,64 +467,12 @@ class VoiceAssistantService:
         except Exception as e:
             _LOGGER.warning("Failed to restart media: %s", e)
 
-        # Resume camera server (reloads YOLO model and restarts capture thread)
-        # Only resume if camera is NOT disabled (user has not manually disabled it)
-        # AND camera server has been started (not None)
-        if self._camera_server is not None and self._state.camera_enabled:
-            try:
-                self._camera_server.resume_from_suspend()
-                _LOGGER.debug("Camera server resumed from suspend")
-            except Exception as e:
-                _LOGGER.warning("Error resuming camera: %s", e)
-
-        # Resume motion controller (restarts control loop thread)
-        if self._motion is not None and self._motion._movement_manager is not None:
-            try:
-                self._motion._movement_manager.resume_from_suspend()
-                _LOGGER.debug("Motion controller resumed from suspend")
-            except Exception as e:
-                _LOGGER.warning("Error resuming motion: %s", e)
-
-        # Resume satellite
-        if self._state is not None and self._state.satellite is not None:
-            try:
-                self._state.satellite.resume()
-                _LOGGER.debug("Satellite resumed")
-            except Exception as e:
-                _LOGGER.warning("Error resuming satellite: %s", e)
-
-        # Resume audio players
-        if self._state is not None:
-            if self._state.tts_player is not None:
-                try:
-                    self._state.tts_player.resume()
-                except Exception as e:
-                    _LOGGER.warning("Error resuming TTS player: %s", e)
-            if self._state.music_player is not None:
-                try:
-                    self._state.music_player.resume()
-                except Exception as e:
-                    _LOGGER.warning("Error resuming music player: %s", e)
-
-        # Signal waiting threads that services are resumed
-        self._robot_services_resumed.set()
-
-        _LOGGER.info("All services resumed - system fully operational")
-
     def _on_robot_disconnected(self) -> None:
-        """Called when robot connection is lost (e.g., daemon unavailable).
-
-        Suspends all non-ESPHome services to keep HA wake control available.
-        """
-        # RobotStateMonitor removed - connection tracking is handled by DaemonStateMonitor
+        """Called when robot connection is lost."""
         self._suspend_non_esphome_services(reason="robot_disconnected", set_sleep_state=False)
 
     def _on_robot_connected(self) -> None:
-        """Called when robot connection is restored.
-
-        Resumes non-ESPHome services unless the system is in sleep mode.
-        """
-        # RobotStateMonitor removed - connection tracking is handled by DaemonStateMonitor
+        """Called when robot connection is restored."""
 
         if self._state is not None and self._state.is_sleeping:
             _LOGGER.info("Robot connected but system is sleeping; deferring resume")
@@ -576,50 +481,27 @@ class VoiceAssistantService:
         self._resume_non_esphome_services(reason="robot_connected", clear_sleep_state=False)
 
     def _on_sleep(self) -> None:
-        """Called when the robot enters sleep mode.
-
-        This is triggered by the SleepManager when the daemon enters STOPPED state.
-        At this point, we should:
-        1. Stop all resource-intensive operations
-        2. Release ML models from memory
-        3. Keep only ESPHome server running for HA control
-        """
-        # RobotStateMonitor removed - sleep tracking is handled by SleepManager
+        """Called when the robot enters sleep mode."""
         self._suspend_non_esphome_services(reason="sleep", set_sleep_state=True)
 
     def _on_wake(self) -> None:
-        """Called when the robot starts waking up.
-
-        This is triggered immediately when daemon state changes from STOPPED.
-        The actual service resume happens after the configured delay (30s default).
-        """
+        """Called when the robot starts waking up."""
         _LOGGER.info("Robot waking up - will resume services after delay...")
 
     def _on_pre_resume(self) -> None:
-        """Called just before services are resumed.
-
-        This happens after the resume delay (30s default).
-        At this point, the daemon should be fully ready.
-        """
+        """Called just before services are resumed."""
         _LOGGER.info("Resuming services after wake delay...")
-        # RobotStateMonitor removed - sleep tracking is handled by SleepManager
         self._resume_non_esphome_services(reason="wake_pre_resume", clear_sleep_state=True)
 
     async def _on_wake_from_ha(self) -> None:
-        """Called when wake_up is triggered from Home Assistant button.
-
-        This bypasses the DaemonStateMonitor polling and directly resumes services
-        after a short delay to allow the robot to wake up.
-        """
+        """Called when wake_up is triggered from Home Assistant."""
         _LOGGER.info("Wake triggered from HA - waiting for daemon running state...")
 
-        # Wait for daemon to be fully running before resuming services.
-        # This avoids early media/motion restart failures after long sleep.
         timeout_s = 35.0
         deadline = time.monotonic() + timeout_s
+        daemon_url = Config.daemon.url.rstrip("/")
         while time.monotonic() < deadline:
             try:
-                daemon_url = Config.daemon.url.rstrip("/")
                 response = requests.get(f"{daemon_url}/api/daemon/status", timeout=2.0)
                 response.raise_for_status()
                 daemon_state = (response.json() or {}).get("state", "")
@@ -636,13 +518,7 @@ class VoiceAssistantService:
         self._on_pre_resume()
 
     async def _on_ha_connected(self) -> None:
-        """Called when Home Assistant connects.
-
-        At this point, we should:
-        1. Load and start camera server if not already started
-        2. Ensure voice models are loaded
-        3. Resume any suspended services
-        """
+        """Called when Home Assistant connects."""
         _LOGGER.info("Home Assistant connected - initializing camera and voice services")
         self._ha_connected = True
         self._ha_connection_established = True
@@ -656,40 +532,23 @@ class VoiceAssistantService:
                     port=self.camera_port,
                     fps=15,
                     quality=80,
-                    enable_face_tracking=bool(
-                        getattr(self._state.preferences, "idle_behavior_enabled", False)
-                        and getattr(self._state.preferences, "face_tracking_enabled", False)
-                    ),
-                    enable_gesture_detection=bool(
-                        getattr(self._state.preferences, "idle_behavior_enabled", False)
-                        and getattr(self._state.preferences, "gesture_detection_enabled", False)
-                    ),
+                    enable_face_tracking=bool(self._state.preferences.face_tracking_enabled),
+                    enable_gesture_detection=bool(self._state.preferences.gesture_detection_enabled),
                     gstreamer_lock=self._gstreamer_lock,
                 )
 
-                # Apply persisted vision preferences before camera server start.
                 prefs = self._state.preferences
-                vision_allowed = bool(getattr(prefs, "idle_behavior_enabled", False))
-                self._camera_server.set_face_tracking_enabled(
-                    bool(vision_allowed and getattr(prefs, "face_tracking_enabled", False))
-                )
-                self._camera_server.set_gesture_detection_enabled(
-                    bool(vision_allowed and getattr(prefs, "gesture_detection_enabled", False))
-                )
-                self._camera_server.set_face_confidence_threshold(
-                    float(getattr(prefs, "face_confidence_threshold", 0.5))
-                )
+                self._camera_server.set_face_tracking_enabled(bool(prefs.face_tracking_enabled))
+                self._camera_server.set_gesture_detection_enabled(bool(prefs.gesture_detection_enabled))
+                self._camera_server.set_face_confidence_threshold(float(prefs.face_confidence_threshold))
 
                 await self._camera_server.start()
 
-                # Store camera_server reference in state for entity registry access
                 self._state._camera_server = self._camera_server
 
-                # Update entity registry with the new camera_server reference
                 if self._state.satellite:
                     self._state.satellite.update_camera_server(self._camera_server)
 
-                # Connect camera server to motion controller for face tracking
                 if self._motion is not None:
                     self._motion.set_camera_server(self._camera_server)
 
@@ -702,39 +561,11 @@ class VoiceAssistantService:
             self._resume_non_esphome_services(reason="ha_connected", clear_sleep_state=False)
 
     def _on_ha_disconnected(self) -> None:
-        """Called when Home Assistant disconnects.
-
-        At this point, we should:
-        1. Suspend camera server to save resources
-        2. Keep ESPHome server running for reconnection
-        3. Ensure voice services are suspended
-        """
+        """Called when Home Assistant disconnects."""
         _LOGGER.warning("Home Assistant disconnected - suspending camera and voice services")
         self._ha_connected = False
 
-        # Suspend non-ESPHome services including camera
-        # Keep ESPHome server running so HA can reconnect
         self._suspend_non_esphome_services(reason="ha_disconnected", set_sleep_state=False)
-
-    def _optimize_microphone_settings(self) -> None:
-        """Optimize ReSpeaker XVF3800 microphone settings for voice recognition.
-
-        Delegates to ReachyController's ReSpeaker adapter.
-        User preferences from Home Assistant override defaults when available.
-        """
-        try:
-            # Build preferences from saved state
-            prefs = self._state.preferences if self._state else None
-            mic_prefs = MicrophonePreferences(
-                agc_enabled=prefs.agc_enabled if prefs else None,
-                agc_max_gain=prefs.agc_max_gain if prefs else None,
-                noise_suppression=prefs.noise_suppression if prefs else None,
-            )
-
-            ReachyController(self.reachy_mini).optimize_microphone_settings(mic_prefs)
-
-        except Exception as e:
-            _LOGGER.warning("Failed to optimize microphone settings: %s", e)
 
     async def stop(self) -> None:
         """Stop the voice assistant service."""
@@ -842,28 +673,22 @@ class VoiceAssistantService:
             "timer_finished.flac",
         ]
 
-        # Verify wake word files
-        missing_wakewords = []
-        for filename in required_wakewords:
-            filepath = _WAKEWORDS_DIR / filename
-            if not filepath.exists():
-                missing_wakewords.append(filename)
+        missing_wakewords = self._find_missing_files(_WAKEWORDS_DIR, required_wakewords)
 
         if missing_wakewords:
             _LOGGER.warning("Missing wake word files: %s. These should be bundled with the package.", missing_wakewords)
 
-        # Verify sound files
-        missing_sounds = []
-        for filename in required_sounds:
-            filepath = _SOUNDS_DIR / filename
-            if not filepath.exists():
-                missing_sounds.append(filename)
+        missing_sounds = self._find_missing_files(_SOUNDS_DIR, required_sounds)
 
         if missing_sounds:
             _LOGGER.warning("Missing sound files: %s. These should be bundled with the package.", missing_sounds)
 
         if not missing_wakewords and not missing_sounds:
             _LOGGER.info("All required files verified successfully.")
+
+    @staticmethod
+    def _find_missing_files(base_dir: Path, filenames: list[str]) -> list[str]:
+        return [filename for filename in filenames if not (base_dir / filename).exists()]
 
     def _load_available_wake_words(self) -> dict[str, AvailableWakeWord]:
         """Load available wake word configurations."""
@@ -915,7 +740,10 @@ class VoiceAssistantService:
             try:
                 with open(preferences_path, encoding="utf-8") as f:
                     data = json.load(f)
-                return Preferences(**data)
+
+                valid_fields = {field.name for field in fields(Preferences)}
+                filtered = {key: value for key, value in data.items() if key in valid_fields}
+                return Preferences(**filtered)
             except Exception as e:
                 _LOGGER.warning("Failed to load preferences: %s", e)
 
@@ -931,39 +759,55 @@ class VoiceAssistantService:
         wake_models: dict[str, MicroWakeWord | OpenWakeWord] = {}
         active_wake_words: set[str] = set()
 
-        # Try to load preferred models
         if preferences.active_wake_words:
             for wake_word_id in preferences.active_wake_words:
-                wake_word = available_wake_words.get(wake_word_id)
-                if wake_word is None:
-                    _LOGGER.warning("Unknown wake word: %s", wake_word_id)
-                    continue
-
-                try:
-                    _LOGGER.debug("Loading wake model: %s", wake_word_id)
-                    loaded_model = wake_word.load()
-                    # Set id attribute on the model for later identification
-                    loaded_model.id = wake_word_id
-                    wake_models[wake_word_id] = loaded_model
-                    active_wake_words.add(wake_word_id)
-                except Exception as e:
-                    _LOGGER.warning("Failed to load wake model %s: %s", wake_word_id, e)
+                self._try_add_wake_model(wake_models, active_wake_words, available_wake_words, wake_word_id)
 
         # Load default model if none loaded
         if not wake_models:
-            wake_word = available_wake_words.get(self.wake_model)
-            if wake_word:
-                try:
-                    _LOGGER.debug("Loading default wake model: %s", self.wake_model)
-                    loaded_model = wake_word.load()
-                    # Set id attribute on the model for later identification
-                    loaded_model.id = self.wake_model
-                    wake_models[self.wake_model] = loaded_model
-                    active_wake_words.add(self.wake_model)
-                except Exception as e:
-                    _LOGGER.error("Failed to load default wake model: %s", e)
+            self._try_add_wake_model(
+                wake_models,
+                active_wake_words,
+                available_wake_words,
+                self.wake_model,
+                unknown_level="error",
+                failure_level="error",
+                log_default=True,
+            )
 
         return wake_models, active_wake_words
+
+    def _try_add_wake_model(
+        self,
+        wake_models: dict[str, MicroWakeWord | OpenWakeWord],
+        active_wake_words: set[str],
+        available_wake_words: dict[str, AvailableWakeWord],
+        wake_word_id: str,
+        *,
+        unknown_level: str = "warning",
+        failure_level: str = "warning",
+        log_default: bool = False,
+    ) -> None:
+        wake_word = available_wake_words.get(wake_word_id)
+        if wake_word is None:
+            getattr(_LOGGER, unknown_level)("Unknown wake word: %s", wake_word_id)
+            return
+
+        try:
+            if log_default:
+                _LOGGER.debug("Loading default wake model: %s", wake_word_id)
+            else:
+                _LOGGER.debug("Loading wake model: %s", wake_word_id)
+            loaded_model = wake_word.load()
+            loaded_model.id = wake_word_id
+            wake_models[wake_word_id] = loaded_model
+            active_wake_words.add(wake_word_id)
+        except Exception as e:
+            message = "Failed to load default wake model: %s" if log_default else "Failed to load wake model %s: %s"
+            if log_default:
+                getattr(_LOGGER, failure_level)(message, e)
+            else:
+                getattr(_LOGGER, failure_level)(message, wake_word_id, e)
 
     def _load_stop_model(self):
         """Load the stop word model."""

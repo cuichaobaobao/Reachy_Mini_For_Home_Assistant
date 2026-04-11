@@ -77,7 +77,7 @@ class AnimationPlayer:
         self._animations: dict[str, AnimationParams] = {}
         self._amplitude_scale: float = 1.0
         self._transition_duration: float = 0.3
-        self._interpolation_duration: float = 1.0  # Time to interpolate to neutral (same as BreathingMove)
+        self._interpolation_duration: float = 0.2
         self._current_animation: str | None = None
         self._target_animation: str | None = None
         self._transition_start: float = 0.0
