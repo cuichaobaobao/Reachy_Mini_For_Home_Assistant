@@ -1,0 +1,92 @@
+from __future__ import annotations
+
+import time
+
+from .audio_player_shared import MOVEMENT_LATENCY_S, STREAM_FETCH_CHUNK_SIZE, _LOGGER
+
+
+class AudioPlayerLocalMixin:
+    def _play_cached_audio(self, audio_bytes: bytes | bytearray, content_type: str) -> bool:
+        if not audio_bytes:
+            return False
+        audio_data = bytes(audio_bytes)
+        mem_iter = (
+            audio_data[i : i + STREAM_FETCH_CHUNK_SIZE] for i in range(0, len(audio_data), STREAM_FETCH_CHUNK_SIZE)
+        )
+        adapted_response = self._iterator_response_adapter(mem_iter)
+        if self._is_pcm_content_type(content_type):
+            return self._stream_pcm_response(adapted_response, content_type)
+        return self._stream_decoded_response(adapted_response, "memory-cache", content_type)
+
+    def _play_local_file(self, file_path: str) -> None:
+        try:
+            duration: float | None = None
+            sway_frames: list[dict] = []
+            try:
+                import soundfile as sf
+
+                info = sf.info(file_path)
+                if info.samplerate > 0 and info.frames > 0:
+                    duration = float(info.frames) / float(info.samplerate)
+            except Exception:
+                duration = None
+            if self._sway_callback is not None:
+                try:
+                    import soundfile as sf
+
+                    data, sample_rate = sf.read(file_path)
+                    if duration is None and sample_rate > 0:
+                        duration = len(data) / sample_rate
+                    from ..motion.speech_sway import SpeechSwayRT
+
+                    sway = SpeechSwayRT()
+                    sway_frames = sway.feed(data, sample_rate)
+                except Exception:
+                    sway_frames = []
+            self.reachy_mini.media.play_sound(file_path)
+            start_time = time.monotonic()
+            frame_duration = 0.05
+            frame_idx = 0
+            has_duration = (duration is not None) and (duration > 0)
+            duration_s = duration if has_duration and duration is not None else 0.0
+            max_duration = (duration_s * 1.5) if has_duration else 60.0
+            playback_timeout = start_time + max_duration
+            sway_base_ts = start_time + MOVEMENT_LATENCY_S
+            while True:
+                now = time.monotonic()
+                if now > playback_timeout:
+                    _LOGGER.warning("Audio playback timeout (%.1fs), stopping", max_duration)
+                    self.reachy_mini.media.stop_playing()
+                    break
+                if self._stop_flag.is_set():
+                    self.reachy_mini.media.stop_playing()
+                    break
+                if has_duration:
+                    if (now - start_time) >= duration_s:
+                        break
+                else:
+                    try:
+                        if not bool(self.reachy_mini.media.is_playing()):
+                            break
+                    except Exception:
+                        pass
+                if self._sway_callback and frame_idx < len(sway_frames):
+                    target_frame = frame_idx
+                    while target_frame < len(sway_frames) and now >= (sway_base_ts + target_frame * frame_duration):
+                        target_frame += 1
+                    while frame_idx < target_frame and frame_idx < len(sway_frames):
+                        self._sway_callback(sway_frames[frame_idx])
+                        frame_idx += 1
+                next_sleep = 0.02
+                if self._sway_callback and frame_idx < len(sway_frames):
+                    next_sway_ts = sway_base_ts + frame_idx * frame_duration
+                    next_sleep = min(next_sleep, max(0.0, next_sway_ts - now))
+                time.sleep(next_sleep)
+        finally:
+            if self._sway_callback:
+                try:
+                    self._sway_callback(
+                        {"pitch_rad": 0.0, "yaw_rad": 0.0, "roll_rad": 0.0, "x_m": 0.0, "y_m": 0.0, "z_m": 0.0}
+                    )
+                except Exception:
+                    pass

@@ -1,4 +1,4 @@
-﻿"""Entity setup helpers for runtime/control related entities."""
+"""Entity setup helpers for runtime/control related entities."""
 
 from __future__ import annotations
 
@@ -117,7 +117,9 @@ def setup_runtime_entities(registry: "EntityRegistry", entities: list) -> None:
             name="Idle Behavior",
             object_id="idle_behavior_enabled",
             icon="mdi:motion-play",
-            getter=lambda: bool(registry._get_preferences().idle_behavior_enabled) if registry._get_preferences() else False,
+            getter=lambda: bool(registry._get_preferences().idle_behavior_enabled)
+            if registry._get_preferences()
+            else False,
             setter=registry._set_idle_behavior_enabled,
         )
     )
@@ -182,40 +184,7 @@ def setup_runtime_entities(registry: "EntityRegistry", entities: list) -> None:
     _LOGGER.debug("Phase 1 entities registered")
 
 
-def setup_sleep_entities(registry: "EntityRegistry", entities: list) -> None:
-    rc = registry.reachy_controller
-
-    def get_sleep_control() -> bool:
-        if registry._sleep_mode_entity is not None:
-            return not bool(registry._sleep_mode_entity.value)
-        return False
-
-    def set_sleep_control(sleeping: bool) -> None:
-        is_sleeping = get_sleep_control()
-        if sleeping != is_sleeping:
-            rc.request_sleep_state(sleeping)
-
-    entities.append(
-        SwitchEntity(
-            server=registry.server,
-            key=get_entity_key("sleep_control"),
-            name="Sleep Control",
-            object_id="sleep_control",
-            icon="mdi:sleep",
-            entity_category=1,
-            value_getter=get_sleep_control,
-            value_setter=set_sleep_control,
-        )
-    )
-    registry._sleep_mode_entity = BinarySensorEntity(
-        server=registry.server,
-        key=get_entity_key("sleep_mode"),
-        name="Sleep Mode",
-        object_id="sleep_mode",
-        icon="mdi:sleep",
-        device_class="running",
-    )
-    entities.append(registry._sleep_mode_entity)
+def setup_service_entities(registry: "EntityRegistry", entities: list) -> None:
     registry._services_suspended_entity = BinarySensorEntity(
         server=registry.server,
         key=get_entity_key("services_suspended"),
@@ -225,7 +194,7 @@ def setup_sleep_entities(registry: "EntityRegistry", entities: list) -> None:
         device_class="running",
     )
     entities.append(registry._services_suspended_entity)
-    _LOGGER.debug("Phase 2 entities registered")
+    _LOGGER.debug("Service state entities registered")
 
 
 def setup_behavior_entities(registry: "EntityRegistry", entities: list) -> None:

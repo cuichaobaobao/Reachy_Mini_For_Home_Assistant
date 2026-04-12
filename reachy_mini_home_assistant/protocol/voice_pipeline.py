@@ -97,10 +97,11 @@ def stop(protocol: "VoiceSatelliteProtocol") -> None:
         protocol.state.tts_player.stop()
         _LOGGER.debug("Stopping timer finished sound")
     else:
-        # audio_player.stop() now invokes the done_callback, so we do not call
-        # _tts_finished() manually here.
         protocol.state.tts_player.stop()
         _LOGGER.debug("TTS response stopped manually")
+        protocol._tts_url = None
+        protocol._tts_played = True
+        protocol._tts_finished()
 
 
 def play_tts(protocol: "VoiceSatelliteProtocol") -> None:

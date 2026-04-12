@@ -16,7 +16,7 @@ from .runtime_entity_setup import (
     setup_behavior_entities,
     setup_camera_entities,
     setup_runtime_entities,
-    setup_sleep_entities,
+    setup_service_entities,
 )
 from .sensor_entity_setup import (
     append_defined_entities,
@@ -58,8 +58,7 @@ class EntityRegistry:
         self.camera_server = camera_server
         self._play_emotion_callback = play_emotion_callback
 
-        # Sleep state entities (will be initialized in _setup_phase2_entities)
-        self._sleep_mode_entity: BinarySensorEntity | None = None
+        # Runtime state entities
         self._services_suspended_entity: BinarySensorEntity | None = None
         self._face_detected_entity: BinarySensorEntity | None = None
         self._gesture_entity: TextSensorEntity | None = None
@@ -319,7 +318,7 @@ class EntityRegistry:
         setup_runtime_entities(self, entities)
 
     def _setup_phase2_entities(self, entities: list) -> None:
-        setup_sleep_entities(self, entities)
+        setup_service_entities(self, entities)
 
     def _setup_phase3_entities(self, entities: list) -> None:
         setup_motion_entities(self, entities)
@@ -370,19 +369,6 @@ class EntityRegistry:
             self._gesture_entity.update_state()
         if self._gesture_confidence_entity:
             self._gesture_confidence_entity.update_state()
-
-    def set_sleep_mode(self, is_sleeping: bool) -> None:
-        """Update the sleep mode state and push to Home Assistant.
-
-        Args:
-            is_sleeping: True if robot is in sleep mode, False if awake
-        """
-        if self._sleep_mode_entity is not None:
-            # For "running" device_class, True = running (awake), False = not running (sleeping)
-            # So we invert the is_sleeping value
-            self._sleep_mode_entity._state = not is_sleeping
-            self._sleep_mode_entity.update_state()
-            _LOGGER.debug("Sleep mode state updated: sleeping=%s", is_sleeping)
 
     def set_services_suspended(self, is_suspended: bool) -> None:
         """Update the services suspended state and push to Home Assistant.
