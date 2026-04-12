@@ -76,7 +76,9 @@ async def start(server: "MJPEGCameraServer") -> None:
 
     if server._face_tracking_enabled:
         if load_head_tracker(server):
-            _LOGGER.info("Face tracking enabled with YOLO head tracker (confidence=%.2f)", server._face_confidence_threshold)
+            _LOGGER.info(
+                "Face tracking enabled with YOLO head tracker (confidence=%.2f)", server._face_confidence_threshold
+            )
     else:
         _LOGGER.info("Face tracking disabled by configuration")
 
@@ -125,7 +127,6 @@ def release_ml_models(server: "MJPEGCameraServer") -> None:
         try:
             if hasattr(server._head_tracker, "close"):
                 server._head_tracker.close()
-            del server._head_tracker
             server._head_tracker = None
             _LOGGER.debug("Head tracker model released")
         except Exception as e:
@@ -134,7 +135,6 @@ def release_ml_models(server: "MJPEGCameraServer") -> None:
         try:
             if hasattr(server._gesture_detector, "close"):
                 server._gesture_detector.close()
-            del server._gesture_detector
             server._gesture_detector = None
             _LOGGER.debug("Gesture detector model released")
         except Exception as e:

@@ -56,7 +56,9 @@ def on_wakeup_sound_finished(protocol: "VoiceSatelliteProtocol") -> None:
 
 
 def play_wakeup_sound(protocol: "VoiceSatelliteProtocol") -> None:
-    protocol.state.tts_player.play(protocol.state.wakeup_sound, done_callback=lambda: on_wakeup_sound_finished(protocol))
+    protocol.state.tts_player.play(
+        protocol.state.wakeup_sound, done_callback=lambda: on_wakeup_sound_finished(protocol)
+    )
 
 
 def tts_finished(protocol: "VoiceSatelliteProtocol") -> None:
@@ -83,7 +85,7 @@ def tts_finished(protocol: "VoiceSatelliteProtocol") -> None:
         protocol.unduck()
         protocol._is_streaming_audio = False
         logger.debug("Conversation finished")
-        schedule_delayed_idle_return(protocol)
+        protocol._schedule_delayed_idle_return()
 
 
 def cancel_delayed_idle_return(protocol: "VoiceSatelliteProtocol") -> None:

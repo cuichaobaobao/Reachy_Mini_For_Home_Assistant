@@ -353,20 +353,20 @@ class BuiltinBehaviorController:
         """Run the built-in robot behavior for a voice phase."""
         if phase == VOICE_PHASE_LISTENING:
             self._set_conversation_mode(True)
-            self._enter_motion_state(phase, "on_listening", True)
+            self._enter_motion_state(phase, "on_listening", face_tracking=True)
             return
 
         if phase == VOICE_PHASE_THINKING:
-            self._enter_motion_state(phase, "on_thinking", True)
+            self._enter_motion_state(phase, "on_thinking", face_tracking=True)
             return
 
         if phase == VOICE_PHASE_SPEAKING:
-            self._enter_motion_state(phase, "on_speaking_start", False)
+            self._enter_motion_state(phase, "on_speaking_start", face_tracking=False)
             return
 
         if phase == VOICE_PHASE_IDLE:
             self._set_conversation_mode(False)
-            self._enter_motion_state(phase, "on_idle", True)
+            self._enter_motion_state(phase, "on_idle", face_tracking=True)
             return
 
         logger.debug("Unhandled built-in voice phase: %s", phase)
