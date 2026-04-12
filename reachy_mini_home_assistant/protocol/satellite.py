@@ -174,6 +174,10 @@ class VoiceSatelliteProtocol(APIServer):
         """Called when a client connects."""
         peer = transport.get_extra_info("peername")
         _LOGGER.info("ESPHome client connected from %s", peer)
+        peer_host = peer[0] if isinstance(peer, tuple) and peer else None
+        if peer_host:
+            self.state.tts_player.set_http_host_override(peer_host)
+            self.state.music_player.set_http_host_override(peer_host)
         super().connection_made(transport)
 
     def update_camera_server(self, camera_server):

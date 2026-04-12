@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import socket
+from urllib.parse import urlparse, urlunparse
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +35,24 @@ def sniff_audio_content_type(audio_bytes: bytes) -> str:
         if audio_bytes.startswith(b"\x1aE\xdf\xa3"):
             return "audio/webm"
     return ""
+
+
+def rewrite_local_service_url(url: str, host_override: str | None) -> str:
+    if not host_override:
+        return url
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            return url
+        hostname = (parsed.hostname or "").lower()
+        if hostname not in {"localhost", "127.0.0.1", "::1", "homeassistant.local", "homeassistant"}:
+            return url
+        netloc = host_override
+        if parsed.port is not None:
+            netloc = f"{host_override}:{parsed.port}"
+        return urlunparse(parsed._replace(netloc=netloc))
+    except Exception:
+        return url
 
 
 def get_stable_client_id() -> str:

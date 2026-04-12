@@ -3,8 +3,10 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING
 
+import requests
+
 from .audio_player_local import AudioPlayerLocalMixin
-from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, _LOGGER, sniff_audio_content_type
+from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, _LOGGER, rewrite_local_service_url, sniff_audio_content_type
 from .audio_player_stream_decoded import AudioPlayerStreamDecodedMixin
 from .audio_player_stream_pcm import AudioPlayerStreamPCMMixin
 
@@ -39,14 +41,19 @@ class AudioPlayerPlaybackMixin(AudioPlayerLocalMixin, AudioPlayerStreamDecodedMi
     def _play_file(self, file_path: str) -> None:
         try:
             if file_path.startswith(("http://", "https://")):
-                import requests
-
-                source_url = file_path
+                source_url = rewrite_local_service_url(file_path, getattr(self, "_http_host_override", None))
                 streamed = False
                 cached_audio = bytearray()
                 content_type = ""
                 try:
-                    with requests.get(source_url, stream=True, timeout=(5.0, 30.0)) as response:
+                    request_kwargs = {"stream": True, "timeout": (5.0, 30.0)}
+                    try:
+                        response_ctx = requests.get(source_url, **request_kwargs)
+                    except requests.exceptions.SSLError:
+                        request_kwargs["verify"] = False
+                        response_ctx = requests.get(source_url, **request_kwargs)
+
+                    with response_ctx as response:
                         response.raise_for_status()
                         content_type = (response.headers.get("Content-Type") or "").lower()
                         stream_iter = response.iter_content(chunk_size=STREAM_FETCH_CHUNK_SIZE)
