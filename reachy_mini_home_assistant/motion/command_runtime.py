@@ -81,39 +81,45 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
         return
 
     if cmd == "set_pose":
-        target_pitch = payload["pitch"] if payload.get("pitch") is not None else manager.state.target_pitch
-        target_yaw = payload["yaw"] if payload.get("yaw") is not None else manager.state.target_yaw
-        target_roll = payload["roll"] if payload.get("roll") is not None else manager.state.target_roll
-        target_x = payload["x"] if payload.get("x") is not None else manager.state.target_x
-        target_y = payload["y"] if payload.get("y") is not None else manager.state.target_y
-        target_z = payload["z"] if payload.get("z") is not None else manager.state.target_z
-        target_antenna_left = (
-            payload["antenna_left"] if payload.get("antenna_left") is not None else manager.state.target_antenna_left
+        yaw_only = payload.get("yaw") is not None and all(
+            payload.get(key) is None
+            for key in ("x", "y", "z", "roll", "pitch", "antenna_left", "antenna_right")
         )
-        target_antenna_right = (
-            payload["antenna_right"] if payload.get("antenna_right") is not None else manager.state.target_antenna_right
-        )
-        max_angular_delta = max(
-            abs(target_pitch - manager.state.target_pitch),
-            abs(target_yaw - manager.state.target_yaw),
-            abs(target_roll - manager.state.target_roll),
-            abs(target_antenna_left - manager.state.target_antenna_left),
-            abs(target_antenna_right - manager.state.target_antenna_right),
-        )
-        transition_duration = max(0.5, min(2.5, max_angular_delta / math.radians(45.0)))
-        action = PendingAction(
-            name="external_pose",
-            target_pitch=target_pitch,
-            target_yaw=target_yaw,
-            target_roll=target_roll,
-            target_x=target_x,
-            target_y=target_y,
-            target_z=target_z,
-            target_antenna_left=target_antenna_left,
-            target_antenna_right=target_antenna_right,
-            duration=transition_duration,
-        )
-        start_action(manager, action)
+        if yaw_only:
+            target_yaw = payload["yaw"]
+            manager._manual_head_yaw_hold = abs(target_yaw) >= math.radians(1.0)
+            yaw_delta = abs(target_yaw - manager.state.target_yaw)
+            transition_duration = max(0.8, min(2.5, yaw_delta / math.radians(45.0)))
+            action = PendingAction(
+                name="manual_head_yaw",
+                target_pitch=manager.state.target_pitch,
+                target_yaw=target_yaw,
+                target_roll=manager.state.target_roll,
+                target_x=manager.state.target_x,
+                target_y=manager.state.target_y,
+                target_z=manager.state.target_z,
+                target_antenna_left=manager.state.target_antenna_left,
+                target_antenna_right=manager.state.target_antenna_right,
+                duration=transition_duration,
+            )
+            start_action(manager, action)
+        else:
+            if payload.get("x") is not None:
+                manager.state.target_x = payload["x"]
+            if payload.get("y") is not None:
+                manager.state.target_y = payload["y"]
+            if payload.get("z") is not None:
+                manager.state.target_z = payload["z"]
+            if payload.get("roll") is not None:
+                manager.state.target_roll = payload["roll"]
+            if payload.get("pitch") is not None:
+                manager.state.target_pitch = payload["pitch"]
+            if payload.get("yaw") is not None:
+                manager.state.target_yaw = payload["yaw"]
+            if payload.get("antenna_left") is not None:
+                manager.state.target_antenna_left = payload["antenna_left"]
+            if payload.get("antenna_right") is not None:
+                manager.state.target_antenna_right = payload["antenna_right"]
         logger.debug("External pose update: %s", payload)
         return
 

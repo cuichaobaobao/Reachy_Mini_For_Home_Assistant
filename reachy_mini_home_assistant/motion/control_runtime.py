@@ -101,7 +101,7 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
     if (
         manager.state.robot_state == RobotState.IDLE
         and not manager.state.face_detected
-        and abs(manager.state.target_yaw) < math.radians(1.0)
+        and not manager._manual_head_yaw_hold
     ):
         target_body_yaw = 0.0
 

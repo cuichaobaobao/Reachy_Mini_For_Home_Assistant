@@ -206,6 +206,7 @@ class MovementManager:
         self._action_start_pose: dict[str, float] = {}
         self._idle_action_queue: deque[PendingAction] = deque()
         self._idle_action_animation_suppression = 0.0
+        self._manual_head_yaw_hold = False
 
         # Face tracking offsets (from camera worker)
         self._face_tracking_offsets: tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
