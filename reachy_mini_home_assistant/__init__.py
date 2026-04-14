@@ -16,7 +16,7 @@ Key features:
 try:
     from importlib.metadata import version
 
-    __version__ = version("reachy_mini_home_assistant")
+    __version__ = version("reachy_mini_home_assistant_custom")
 except Exception:
     __version__ = "0.0.0"  # Fallback for development
 __author__ = "Desmond Dong"
