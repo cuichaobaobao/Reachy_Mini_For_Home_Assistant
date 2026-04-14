@@ -103,6 +103,11 @@ def update_idle_look_around(
         manager.state.look_around_in_progress = False
         return
 
+    if manager._manual_head_yaw_hold:
+        manager.state.next_look_around_time = 0.0
+        manager.state.look_around_in_progress = False
+        return
+
     if manager._pending_action is not None:
         return
 
