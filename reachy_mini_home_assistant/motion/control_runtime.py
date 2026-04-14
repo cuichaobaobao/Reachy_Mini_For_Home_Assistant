@@ -98,7 +98,11 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
 
     final_head_yaw = extract_yaw_from_pose(final_head)
     target_body_yaw = clamp_body_yaw(final_head_yaw)
-    if manager.state.robot_state == RobotState.IDLE and not manager.state.face_detected:
+    if (
+        manager.state.robot_state == RobotState.IDLE
+        and not manager.state.face_detected
+        and abs(manager.state.target_yaw) < math.radians(1.0)
+    ):
         target_body_yaw = 0.0
 
     now = manager._now()

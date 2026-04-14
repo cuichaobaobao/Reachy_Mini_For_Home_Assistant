@@ -27,7 +27,7 @@ jobs:
           git commit -m "Fresh sync: $(date +%Y-%m-%d\ %H:%M:%S)"
           
           # Add Hugging Face remote
-          git remote add hf https://djhui5710:$HF_TOKEN@huggingface.co/spaces/djhui5710/reachy_mini_home_assistant
+          git remote add hf https://lichao622:$HF_TOKEN@huggingface.co/spaces/lichao622/reachy_mini_home_assistant_custom
           
           # Push LFS objects first
           git lfs push hf hf-sync --all
