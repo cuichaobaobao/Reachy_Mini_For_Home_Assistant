@@ -15,6 +15,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
+## [1.0.6] - 2026-04-15
+
+### Changed
+- Tune idle breathing to a smoother cadence by lowering the idle base and Z-axis frequency from 0.24Hz to 0.18Hz while keeping the official-style 0.5Hz antenna sway and 0.262rad antenna amplitude.
+- Keep the listening animation unchanged to preserve the current attentive response during STT.
+- Increase the thinking animation cadence from 0.26Hz to 0.34Hz so processing feels less sluggish without returning to a fast mechanical rhythm.
+- Increase the speaking animation cadence from 0.32Hz to 0.42Hz so TTS motion feels more expressive while keeping the existing movement amplitudes.
+
+### Fixed
+- Smooth the wake transition from disabled-idle rest pose over 0.7s instead of snapping pitch and antennas directly to neutral.
+- Preserve the current yaw anchor and manual head-yaw hold behavior during wake-from-rest smoothing, so manual turn-and-hold and body-follow behavior stay intact.
+- Avoid overwriting an already queued DOA/manual motion action when leaving disabled-idle rest, allowing that action to provide its own smooth interpolation.
+
 ## [1.0.5] - 2026-04-12
 
 ### Changed

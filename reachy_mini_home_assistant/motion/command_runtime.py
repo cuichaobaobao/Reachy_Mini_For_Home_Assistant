@@ -62,17 +62,29 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
             # actually ends and `on_idle()` decides how to settle the robot.
             # When idle behavior is disabled, leaving IDLE must clear the
             # low-energy rest pose so wakeup/listening can lift the head and
-            # antennas again while still keeping the current yaw anchor.
+            # antennas again while still keeping the current yaw anchor. Use
+            # the existing action interpolation so the antennas do not snap up.
             if old_state == RobotState.IDLE and not manager._idle_behavior_enabled():
-                if manager._pending_action is not None and manager._pending_action.name == "idle_rest":
-                    manager._pending_action = None
-                manager.state.target_x = 0.0
-                manager.state.target_y = 0.0
-                manager.state.target_z = 0.0
-                manager.state.target_roll = 0.0
-                manager.state.target_pitch = 0.0
-                manager.state.target_antenna_left = 0.0
-                manager.state.target_antenna_right = 0.0
+                if manager._pending_action is not None and manager._pending_action.name != "idle_rest":
+                    # A queued DOA/manual action already interpolates pitch and
+                    # antennas to its target; do not overwrite it with wakeup.
+                    pass
+                else:
+                    if manager._pending_action is not None and manager._pending_action.name == "idle_rest":
+                        manager._pending_action = None
+                    action = PendingAction(
+                        name="wake_from_idle_rest",
+                        target_x=0.0,
+                        target_y=0.0,
+                        target_z=0.0,
+                        target_roll=0.0,
+                        target_pitch=0.0,
+                        target_yaw=manager.state.target_yaw,
+                        target_antenna_left=0.0,
+                        target_antenna_right=0.0,
+                        duration=0.7,
+                    )
+                    start_action(manager, action)
                 manager._antenna_controller.reset()
             manager._idle_antenna_smoothed = None
             manager._last_idle_antenna_update = 0.0
