@@ -168,7 +168,7 @@ class ReachyMiniMotion:
             if self._movement_manager.get_idle_behavior_enabled():
                 self._movement_manager.reset_to_neutral(duration=2.0)
             else:
-                self._movement_manager.transition_to_idle_rest(duration=2.0)
+                self._movement_manager.transition_to_idle_rest(duration=2.6)
 
         # Note: Face tracking remains enabled for continuous tracking
         # This allows the robot to always look at the user when they approach

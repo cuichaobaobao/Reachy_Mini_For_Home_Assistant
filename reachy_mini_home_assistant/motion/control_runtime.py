@@ -98,10 +98,14 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
 
     final_head_yaw = extract_yaw_from_pose(final_head)
     target_body_yaw = clamp_body_yaw(final_head_yaw)
+    active_turn_action = (
+        manager._pending_action is not None and manager._pending_action.name in {"turn_to", "doa_turn"}
+    )
     if (
         manager.state.robot_state == RobotState.IDLE
         and not manager.state.face_detected
         and not manager._manual_head_yaw_hold
+        and not active_turn_action
     ):
         target_body_yaw = 0.0
 
@@ -112,7 +116,7 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
     else:
         dt = max(1e-6, now - manager._last_body_yaw_update)
         max_rate_rad_s = math.radians(Config.motion.body_yaw_max_rate_deg_s)
-        if manager.state.face_detected or manager.state.robot_state != RobotState.IDLE:
+        if manager.state.face_detected or manager.state.robot_state != RobotState.IDLE or active_turn_action:
             max_rate_rad_s *= 1.15
         max_step = max_rate_rad_s * dt
         delta = target_body_yaw - manager._body_yaw_smoothed

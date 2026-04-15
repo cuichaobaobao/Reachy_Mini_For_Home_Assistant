@@ -32,6 +32,32 @@ class CommandRuntimeSourceTests(unittest.TestCase):
         self.assertIn("manager._antenna_controller.reset()", body)
 
 
+class MotionTimingSourceTests(unittest.TestCase):
+    def test_idle_turn_actions_keep_body_follow_enabled(self):
+        path = Path("reachy_mini_home_assistant/motion/control_runtime.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn('manager._pending_action.name in {"turn_to", "doa_turn"}', content)
+        self.assertIn("and not active_turn_action", content)
+        self.assertIn("or active_turn_action", content)
+
+    def test_turn_actions_keep_fast_pose_with_separate_antenna_smoothing(self):
+        path = Path("reachy_mini_home_assistant/motion/movement_manager.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn('ANTENNA_WAKE_ACTIONS = frozenset({"turn_to", "doa_turn", "wake_from_idle_rest"})', content)
+        self.assertIn("ANTENNA_WAKE_MIN_DURATION_S = 0.75", content)
+        self.assertIn("antenna_delta > ANTENNA_LARGE_MOVE_THRESHOLD_RAD", content)
+        self.assertIn("pose_progress = min(1.0, elapsed / pose_duration)", content)
+        self.assertIn("antenna_progress = min(1.0, elapsed / antenna_duration)", content)
+
+    def test_disabled_idle_rest_return_is_gentler(self):
+        path = Path("reachy_mini_home_assistant/motion/reachy_motion.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn("transition_to_idle_rest(duration=2.6)", content)
+
+
 class VoicePipelineStopTests(unittest.TestCase):
     def _make_protocol(self):
         stop_word = types.SimpleNamespace(id="stop")

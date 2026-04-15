@@ -78,6 +78,9 @@ ANIMATION_BLEND_DURATION = 0.18  # Seconds to blend animation back when face los
 FACE_TRACKING_ANIMATION_BLEND = 0.35
 IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.4  # Slightly longer fade avoids visible idle/action handoff steps
 IDLE_ACTION_ANTENNA_SUPPRESSION = 0.25  # Keep idle antenna motion mostly continuous during idle actions
+ANTENNA_LARGE_MOVE_THRESHOLD_RAD = 1.0
+ANTENNA_WAKE_MIN_DURATION_S = 0.75
+ANTENNA_WAKE_ACTIONS = frozenset({"turn_to", "doa_turn", "wake_from_idle_rest"})
 
 
 def _smoothstep(value: float) -> float:
@@ -773,30 +776,39 @@ class MovementManager:
             return
 
         elapsed = self._now() - self._action_start_time
-        progress = min(1.0, elapsed / self._pending_action.duration)
+        action = self._pending_action
+        pose_duration = max(1e-6, float(action.duration))
+        antenna_duration = pose_duration
+        start = self._action_start_pose
+        antenna_delta = max(
+            abs(action.target_antenna_left - start["antenna_left"]),
+            abs(action.target_antenna_right - start["antenna_right"]),
+        )
+        if action.name in ANTENNA_WAKE_ACTIONS and antenna_delta > ANTENNA_LARGE_MOVE_THRESHOLD_RAD:
+            antenna_duration = max(antenna_duration, ANTENNA_WAKE_MIN_DURATION_S)
 
         # Use a softer easing curve so idle actions and micro gestures start/stop less abruptly.
-        t = _smootherstep(progress)
+        pose_progress = min(1.0, elapsed / pose_duration)
+        antenna_progress = min(1.0, elapsed / antenna_duration)
+        t = _smootherstep(pose_progress)
+        antenna_t = _smootherstep(antenna_progress)
 
         # Interpolate pose
-        start = self._action_start_pose
-        action = self._pending_action
-
         self.state.target_pitch = start["pitch"] + t * (action.target_pitch - start["pitch"])
         self.state.target_yaw = start["yaw"] + t * (action.target_yaw - start["yaw"])
         self.state.target_roll = start["roll"] + t * (action.target_roll - start["roll"])
         self.state.target_x = start["x"] + t * (action.target_x - start["x"])
         self.state.target_y = start["y"] + t * (action.target_y - start["y"])
         self.state.target_z = start["z"] + t * (action.target_z - start["z"])
-        self.state.target_antenna_left = start["antenna_left"] + t * (
+        self.state.target_antenna_left = start["antenna_left"] + antenna_t * (
             action.target_antenna_left - start["antenna_left"]
         )
-        self.state.target_antenna_right = start["antenna_right"] + t * (
+        self.state.target_antenna_right = start["antenna_right"] + antenna_t * (
             action.target_antenna_right - start["antenna_right"]
         )
 
         # Action complete
-        if progress >= 1.0:
+        if elapsed >= max(pose_duration, antenna_duration):
             completed_action = self._pending_action
 
             if completed_action.callback:

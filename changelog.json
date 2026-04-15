@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.7",
+    "date": "2026-04-15",
+    "changes": [
+      "Build: Bump package version to 1.0.7",
+      "Change: Keep DOA turn-to-sound yaw timing fast at 0.5s while allowing large antenna moves to use a separate minimum 0.75s smoothing window",
+      "Change: Make disabled-idle return-to-rest motion gentler by extending the idle rest transition from 2.0s to 2.6s",
+      "Fix: Allow body yaw to follow turn_to and doa_turn actions even while the robot is still technically in IDLE, preventing the head-only turn that could happen just before LISTENING state arrives",
+      "Fix: Smooth only large antenna jumps for wake/turn actions, so idle-rest antennas no longer snap up while head and body still turn quickly toward the sound source"
+    ]
+  },
+  {
     "version": "1.0.6",
     "date": "2026-04-15",
     "changes": [

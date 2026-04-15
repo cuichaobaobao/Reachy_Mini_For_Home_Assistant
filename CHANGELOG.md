@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
+## [1.0.7] - 2026-04-15
+
+### Changed
+- Keep DOA turn-to-sound yaw timing fast at 0.5s while allowing large antenna moves to use a separate minimum 0.75s smoothing window.
+- Make disabled-idle return-to-rest motion gentler by extending the idle rest transition from 2.0s to 2.6s.
+
+### Fixed
+- Allow body yaw to follow `turn_to` and `doa_turn` actions even while the robot is still technically in IDLE, preventing the head-only turn that could happen just before LISTENING state arrives.
+- Smooth only large antenna jumps for wake/turn actions, so idle-rest antennas no longer snap up while head and body still turn quickly toward the sound source.
+
 ## [1.0.6] - 2026-04-15
 
 ### Changed
