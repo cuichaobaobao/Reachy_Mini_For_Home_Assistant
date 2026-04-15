@@ -79,7 +79,7 @@ FACE_TRACKING_ANIMATION_BLEND = 0.35
 IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.4  # Slightly longer fade avoids visible idle/action handoff steps
 IDLE_ACTION_ANTENNA_SUPPRESSION = 0.25  # Keep idle antenna motion mostly continuous during idle actions
 ANTENNA_LARGE_MOVE_THRESHOLD_RAD = 1.0
-ANTENNA_WAKE_MIN_DURATION_S = 0.75
+ANTENNA_WAKE_MIN_DURATION_S = 1.0
 ANTENNA_WAKE_ACTIONS = frozenset({"turn_to", "doa_turn", "wake_from_idle_rest"})
 
 
@@ -502,6 +502,22 @@ class MovementManager:
             duration=duration,
         )
         self._enqueue_command("action", action, "neutral", timeout=0)
+
+    def reset_yaw_to_neutral(self, duration: float = 1.2) -> None:
+        """Thread-safe: Recenter yaw while preserving the current pose height and antenna state."""
+        action = PendingAction(
+            name="neutral_yaw",
+            target_pitch=self.state.target_pitch,
+            target_yaw=0.0,
+            target_roll=self.state.target_roll,
+            target_x=self.state.target_x,
+            target_y=self.state.target_y,
+            target_z=self.state.target_z,
+            target_antenna_left=self.state.target_antenna_left,
+            target_antenna_right=self.state.target_antenna_right,
+            duration=duration,
+        )
+        self._enqueue_command("action", action, "neutral_yaw", timeout=0)
 
     def transition_to_idle_rest(self, duration: float = 2.0) -> None:
         """Thread-safe: Smoothly move into the configured idle rest pose."""

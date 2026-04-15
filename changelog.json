@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.8",
+    "date": "2026-04-15",
+    "changes": [
+      "Build: Bump package version to 1.0.8",
+      "Change: Increase large wake/turn antenna smoothing from 0.75s to 1.0s while keeping DOA yaw/body turn timing at 0.5s",
+      "Change: Recenter yaw after a completed non-continuous conversation before the delayed idle-rest timer fires, so a second wake word starts from a clean forward orientation",
+      "Fix: Preserve manual head-yaw hold by skipping the post-conversation yaw recenter when the user has manually anchored the head direction",
+      "Fix: Keep the delayed idle/rest behavior intact; the robot recenters yaw after TTS but still waits before entering neutral idle or disabled-idle rest"
+    ]
+  },
+  {
     "version": "1.0.7",
     "date": "2026-04-15",
     "changes": [

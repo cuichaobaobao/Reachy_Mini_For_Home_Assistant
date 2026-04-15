@@ -153,6 +153,16 @@ class ReachyMiniMotion:
         # Don't change state yet - let on_idle handle that
         _LOGGER.debug("Reachy Mini: Speaking ended")
 
+    def on_conversation_finished(self):
+        """Called when a non-continuous conversation ends before delayed idle return."""
+        if self._movement_manager is None:
+            return
+
+        self._is_speaking = False
+        if not self._movement_manager._manual_head_yaw_hold:
+            self._movement_manager.reset_yaw_to_neutral(duration=1.2)
+        _LOGGER.debug("Reachy Mini: Conversation finished, recentering yaw before idle")
+
     def on_idle(self):
         """Called when returning to idle state.
 

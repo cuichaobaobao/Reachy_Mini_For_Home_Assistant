@@ -15,6 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
+## [1.0.8] - 2026-04-15
+
+### Changed
+- Increase large wake/turn antenna smoothing from 0.75s to 1.0s while keeping DOA yaw/body turn timing at 0.5s.
+- Recenter yaw after a completed non-continuous conversation before the delayed idle-rest timer fires, so a second wake word starts from a clean forward orientation.
+
+### Fixed
+- Preserve manual head-yaw hold by skipping the post-conversation yaw recenter when the user has manually anchored the head direction.
+- Keep the delayed idle/rest behavior intact; the robot recenters yaw after TTS but still waits before entering neutral idle or disabled-idle rest.
+
 ## [1.0.7] - 2026-04-15
 
 ### Changed

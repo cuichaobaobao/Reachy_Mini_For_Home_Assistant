@@ -46,16 +46,27 @@ class MotionTimingSourceTests(unittest.TestCase):
         content = path.read_text(encoding="utf-8")
 
         self.assertIn('ANTENNA_WAKE_ACTIONS = frozenset({"turn_to", "doa_turn", "wake_from_idle_rest"})', content)
-        self.assertIn("ANTENNA_WAKE_MIN_DURATION_S = 0.75", content)
+        self.assertIn("ANTENNA_WAKE_MIN_DURATION_S = 1.0", content)
         self.assertIn("antenna_delta > ANTENNA_LARGE_MOVE_THRESHOLD_RAD", content)
         self.assertIn("pose_progress = min(1.0, elapsed / pose_duration)", content)
         self.assertIn("antenna_progress = min(1.0, elapsed / antenna_duration)", content)
+        self.assertIn("def reset_yaw_to_neutral", content)
+        self.assertIn('name="neutral_yaw"', content)
 
     def test_disabled_idle_rest_return_is_gentler(self):
         path = Path("reachy_mini_home_assistant/motion/reachy_motion.py")
         content = path.read_text(encoding="utf-8")
 
         self.assertIn("transition_to_idle_rest(duration=2.6)", content)
+
+    def test_conversation_finished_recenters_yaw_before_delayed_idle(self):
+        session_flow = Path("reachy_mini_home_assistant/protocol/session_flow.py").read_text(encoding="utf-8")
+        reachy_motion = Path("reachy_mini_home_assistant/motion/reachy_motion.py").read_text(encoding="utf-8")
+
+        self.assertIn('protocol._run_motion_state("conversation_finished", "on_conversation_finished")', session_flow)
+        self.assertIn("def on_conversation_finished", reachy_motion)
+        self.assertIn("reset_yaw_to_neutral(duration=1.2)", reachy_motion)
+        self.assertIn("if not self._movement_manager._manual_head_yaw_hold", reachy_motion)
 
 
 class VoicePipelineStopTests(unittest.TestCase):

@@ -84,6 +84,7 @@ def tts_finished(protocol: "VoiceSatelliteProtocol") -> None:
         clear_conversation(protocol)
         protocol.unduck()
         protocol._is_streaming_audio = False
+        protocol._run_motion_state("conversation_finished", "on_conversation_finished")
         logger.debug("Conversation finished")
         protocol._schedule_delayed_idle_return()
 
