@@ -1059,7 +1059,6 @@ class VoiceAssistantService:
                 if (ctx.last_active is None) or ((now - ctx.last_active) > self._state.refractory_seconds):
                     _LOGGER.info("Wake word detected: %s", wake_word.id)
                     self._state.satellite.wakeup(wake_word)
-                    # Face tracking will handle looking at user automatically
                     self._motion.on_wakeup()
                     ctx.last_active = now
 

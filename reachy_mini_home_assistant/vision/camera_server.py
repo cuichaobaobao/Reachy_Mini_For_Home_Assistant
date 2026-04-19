@@ -2,8 +2,7 @@
 MJPEG Camera Server for Reachy Mini.
 
 This module streams frames from the Reachy Mini camera as MJPEG for Home
-Assistant and external vision services. Robot-side face tracking and gesture
-recognition are intentionally not included here.
+Assistant and external video services as a plain camera feed.
 """
 
 from __future__ import annotations

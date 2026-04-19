@@ -7,13 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-- **NameError** - Add missing deque import in gesture smoother
-- **Syntax Error** - Add missing class indentation for volume methods in audio_player.py
-- **Audio Card Name Detection** - Use SDK's detection logic instead of hardcoded values
-- **SDK Port 8000 Blocking** - Use amixer directly for volume control to avoid SDK HTTP API blocking
-- **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
-- **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
+_No unreleased changes._
+
+## [1.0.10] - 2026-04-19
+
+### Changed
+- Refresh the Hugging Face landing page and user manuals to match the current voice, motion, and camera-stream focused app.
+- Replace the old project summary with a concise current architecture note for the custom app.
+
+### Removed
+- Remove stale public-facing references to removed robot-side vision AI features from current docs and landing content.
+- Remove obsolete face/gesture comments and unused preference-number helpers left after the 1.0.9 cleanup.
 
 ## [1.0.9] - 2026-04-19
 

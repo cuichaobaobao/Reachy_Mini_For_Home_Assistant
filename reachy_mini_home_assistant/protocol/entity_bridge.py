@@ -29,7 +29,7 @@ def create_entity_registry(protocol: "VoiceSatelliteProtocol") -> EntityRegistry
 
 
 def bind_camera_callbacks(protocol: "VoiceSatelliteProtocol", camera_server) -> None:
-    # The camera server is a pure video stream; no robot-side face/gesture callbacks are registered.
+    # The camera server is a pure video stream; no analysis callbacks are registered.
     return
 
 

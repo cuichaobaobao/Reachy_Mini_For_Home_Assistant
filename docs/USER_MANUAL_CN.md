@@ -15,13 +15,14 @@
 ## 安装步骤
 
 ### 第一步：安装应用
-从 Reachy Mini 应用商店安装 `reachy_mini_home_assistant`。
+从 Reachy Mini 应用商店安装 `reachy_mini_home_assistant_custom`。
 
 ### 第二步：启动应用
 应用将自动：
-- 在端口 6053 启动 ESPHome 服务器
-- 加载预打包的唤醒词模型
-- 通过 mDNS 注册以便自动发现
+- 在端口 6053 启动 ESPHome 卫星服务
+- 加载本地唤醒词模型
+- 通过 mDNS 注册以便 Home Assistant 自动发现
+- 在端口 8081 提供 MJPEG 摄像头流
 - 如果网络上有 Sendspin 服务器则自动连接
 
 ### 第三步：连接 Home Assistant
@@ -30,8 +31,8 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 
 **手动连接：**
 1. 进入 设置 → 设备与服务
-2. 点击"添加集成"
-3. 选择"ESPHome"
+2. 点击“添加集成”
+3. 选择“ESPHome”
 4. 输入机器人的 IP 地址和端口 6053
 
 ---
@@ -39,10 +40,10 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 ## 功能介绍
 
 ### 语音助手
-- **唤醒词检测**：说 "Okay Nabu" 激活（本地处理）
-- **停止词**：说 "Stop" 结束对话
+- **唤醒词检测**：说 “Okay Nabu” 激活（本地处理）
+- **停止词**：说 “Stop” 中断播放或结束当前语音输出
 - **连续对话模式**：无需重复唤醒词即可持续对话
-- **语音识别/合成**：使用 Home Assistant 配置的语音引擎
+- **语音识别/合成**：使用 Home Assistant 配置的 STT、TTS 和对话管线
 
 **支持的唤醒词：**
 - Okay Nabu（默认）
@@ -50,26 +51,26 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 - Alexa
 - Hey Luna
 
-### 人脸追踪
-- 基于 YOLO 的人脸检测
-- 头部跟随检测到的人脸
-- 头部转动时身体随之旋转
-- 自适应帧率：活跃时 15fps，空闲时 2fps
-- 可在 Home Assistant 中运行时开关
+### 动作与待机
+- 唤醒、聆听、思考、说话和计时器提醒都有内建动作
+- 支持呼吸待机、天线动作和空闲微动作
+- 支持手动 Head Yaw 平滑转向并保持角度
+- 手动转向时身体会跟随头部方向
+- 对话结束后会按当前设置回正或保持手动角度
 
-### 手势检测
-检测到的手势会作为实体状态同步到 Home Assistant。
-当前默认运行时不会直接用手势触发机器人动作。
+### DOA 声源追踪
+- 使用麦克风阵列的声源方向数据
+- 唤醒时机器人可转向声源
+- 可通过 Home Assistant 开关启用/禁用
 
-| 输出 | 说明 |
-|------|------|
-| `gesture_detected` | 当前识别到的手势标签 |
-| `gesture_confidence` | 手势识别置信度 |
+### 摄像头视频流
+- 提供 MJPEG 视频流：`http://<robot-ip>:8081/stream`
+- 提供单帧截图：`http://<robot-ip>:8081/snapshot`
+- Home Assistant 中保留 Camera 实体
+- 可供外部系统（例如 Frigate/go2rtc）拉流测试
 
 ### 情绪响应
-机器人可播放 35 种不同情绪：
-- 基础：开心、难过、愤怒、恐惧、惊讶、厌恶
-- 扩展：大笑、爱慕、骄傲、感激、热情、好奇、惊叹、害羞、困惑、沉思、焦虑、害怕、沮丧、烦躁、狂怒、轻蔑、无聊、疲倦、精疲力竭、孤独、沮丧、顺从、不确定、不舒服
+机器人可播放 35 种不同情绪，包括开心、难过、愤怒、惊讶、大笑、爱慕、好奇、沉思、疲倦等。
 
 ### 音频功能
 - 扬声器音量控制（0-100%）
@@ -83,11 +84,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 - Reachy Mini 作为 PLAYER 接收音频流
 - 语音对话时自动暂停
 - 无需用户配置
-
-### DOA 声源追踪
-- 声源方向检测
-- 唤醒时机器人转向声源
-- 可通过开关启用/禁用
 
 ---
 
@@ -103,15 +99,10 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 | Disable Camera | 开关 | 暂停/恢复摄像头服务 |
 | Idle Behavior | 开关 | 统一空闲行为：头部、天线、微动作 |
 | Sendspin | 开关 | 启用/禁用 Sendspin 发现与播放 |
-| Face Tracking | 开关 | 启用/禁用人脸跟踪 |
-| Gesture Detection | 开关 | 启用/禁用手势检测 |
-| Face Confidence | 数值 (0-1) | 人脸跟踪置信度阈值 |
 
-### 阶段 2：睡眠与运行状态
+### 阶段 2：运行状态
 | 实体 | 类型 | 说明 |
 |------|------|------|
-| Sleep Control | 开关 | 打开表示进入睡眠，关闭表示唤醒 |
-| Sleep Mode | 二进制传感器 | 运行中表示唤醒，非运行表示睡眠 |
 | Services Suspended | 二进制传感器 | 运行中表示服务活跃 |
 
 ### 阶段 3：姿态控制
@@ -155,38 +146,17 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 ### 阶段 8：情绪控制
 | 实体 | 类型 | 说明 |
 |------|------|------|
-| Emotion | 选择器 | 选择要播放的情绪（35 个选项）|
+| Emotion | 选择器 | 选择要播放的情绪（35 个选项） |
 
 ### 阶段 10：摄像头
 | 实体 | 类型 | 说明 |
 |------|------|------|
 | Camera | 摄像头 | 实时 MJPEG 流 |
 
-### 3D 可视化卡片
-可在 Home Assistant 中安装自定义 Lovelace 卡片，实时 3D 可视化 Reachy Mini 机器人。
-
-安装地址：[ha-reachy-mini](https://github.com/Desmond-Dong/ha-reachy-mini)
-
-功能：
-- 实时 3D 机器人可视化
-- 交互式机器人状态视图
-- 连接机器人守护进程获取实时更新
-
 ### 阶段 21：对话
 | 实体 | 类型 | 说明 |
 |------|------|------|
 | Continuous Conversation | 开关 | 多轮对话模式 |
-
-### 阶段 22：手势检测
-| 实体 | 类型 | 说明 |
-|------|------|------|
-| Gesture Detected | 文本传感器 | 当前手势名称 |
-| Gesture Confidence | 传感器 (%) | 检测置信度 |
-
-### 阶段 23：人脸检测
-| 实体 | 类型 | 说明 |
-|------|------|------|
-| Face Detected | 二进制传感器 | 视野中是否有人脸 |
 
 ### 阶段 24：系统诊断
 | 实体 | 类型 | 说明 |
@@ -203,30 +173,15 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 
 ---
 
-## 睡眠模式
-
-运行时反应是零配置的：语音阶段、计时器提醒和 HA 状态触发情绪，共用同一套内建行为模型。
-
-### 进入睡眠
-- 在 Home Assistant 中打开 `Sleep Control` 开关
-- 机器人放松电机、停止摄像头、暂停语音检测
-
-### 唤醒
-- 在 Home Assistant 中关闭 `Sleep Control` 开关
-- 或说唤醒词
-- 机器人恢复所有功能
-
----
-
 ## 故障排除
 
 | 问题 | 解决方案 |
 |------|----------|
 | 不响应唤醒词 | 检查 Mute 是否关闭，减少背景噪音，并确认已连接 Home Assistant |
-| 人脸追踪不工作 | 确保光线充足，检查 Face Detected 传感器 |
 | 没有音频输出 | 检查 Speaker Volume，验证 HA 中的 TTS 引擎 |
 | 无法连接 HA | 确认在同一网络，检查端口 6053 |
-| 手势检测不到 | 确保光线充足，正对摄像头 |
+| 摄像头不可用 | 确认 Disable Camera 已关闭，并检查 `http://<robot-ip>:8081/stream` |
+| 动作没有响应 | 确认电机已启用，检查机器人 daemon 状态 |
 
 ---
 
@@ -237,8 +192,10 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 停止词：       "Stop"
 ESPHome 端口： 6053
 摄像头端口：   8081 (MJPEG)
+视频流：       http://<robot-ip>:8081/stream
+截图：         http://<robot-ip>:8081/snapshot
 ```
 
 ---
 
-*Reachy Mini 语音助手 v1.0.4*
+*Reachy Mini 语音助手 v1.0.10*

@@ -141,7 +141,7 @@ class VoiceSatelliteProtocol(APIServer):
         # Initialize entity registry
         self._entity_registry = create_entity_registry(self)
 
-        # Camera server is pure video; no face/gesture callbacks are registered.
+        # Camera server is pure video; no analysis callbacks are registered.
         bind_camera_callbacks(self, camera_server)
 
         self._event_emotion_mapper = EventEmotionMapper()

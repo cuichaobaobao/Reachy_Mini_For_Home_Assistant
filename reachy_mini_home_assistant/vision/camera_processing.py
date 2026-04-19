@@ -1,8 +1,7 @@
 """Frame capture helpers for `MJPEGCameraServer`.
 
-The camera server intentionally provides a plain MJPEG stream only. Face
-tracking and gesture recognition are handled outside this app so the robot
-keeps video, audio, and motion responsibilities lightweight.
+The camera server intentionally provides a plain MJPEG stream only so the
+robot keeps video, audio, and motion responsibilities lightweight.
 """
 
 from __future__ import annotations

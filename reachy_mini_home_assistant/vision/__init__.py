@@ -1,8 +1,7 @@
-"""Vision module for Reachy Mini.
+"""Video streaming module for Reachy Mini.
 
 This package provides a plain MJPEG camera stream for Home Assistant and
-external vision services. Robot-side face and gesture AI have been removed to
-keep this app lightweight.
+external video services while keeping the robot-side camera path lightweight.
 """
 
 from .camera_server import MJPEGCameraServer

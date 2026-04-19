@@ -9,7 +9,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Optional
 
 from ..models import Preferences
-from .entity import BinarySensorEntity, NumberEntity
+from .entity import BinarySensorEntity
 from .entity_extensions import SwitchEntity
 from .entity_keys import get_entity_key
 from .runtime_entity_setup import (
@@ -150,16 +150,6 @@ class EntityRegistry:
             setattr(prefs, key, bool(enabled))
             self._save_preferences()
 
-    def _get_pref_float(self, key: str, default: float) -> float:
-        prefs = self._get_preferences()
-        return float(getattr(prefs, key, default)) if prefs is not None else default
-
-    def _set_pref_float(self, key: str, value: float) -> None:
-        prefs = self._get_preferences()
-        if prefs is not None:
-            setattr(prefs, key, float(value))
-            self._save_preferences()
-
     def _set_idle_behavior_enabled(self, enabled: bool) -> None:
         self.reachy_controller.set_idle_behavior_enabled(enabled)
 
@@ -221,36 +211,6 @@ class EntityRegistry:
             icon=icon,
             getter=getter,
             setter=setter,
-        )
-
-    def _make_preference_number(
-        self,
-        *,
-        key_name: str,
-        name: str,
-        object_id: str,
-        icon: str,
-        getter: Callable[[], float],
-        setter: Callable[[float], None],
-        min_value: float,
-        max_value: float,
-        step: float,
-        mode: int = 2,
-    ) -> NumberEntity:
-        """Create a number entity with the common registry wiring."""
-        return NumberEntity(
-            server=self.server,
-            key=get_entity_key(key_name),
-            name=name,
-            object_id=object_id,
-            min_value=min_value,
-            max_value=max_value,
-            step=step,
-            icon=icon,
-            mode=mode,
-            entity_category=1,
-            value_getter=getter,
-            value_setter=setter,
         )
 
     def _append_defined_entities(

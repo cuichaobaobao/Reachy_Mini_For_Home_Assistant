@@ -17,7 +17,7 @@
 				<span class="logo">🤖</span>
 				<span class="brand-name">Reachy Mini for Home Assistant</span>
 			</div>
-			<div class="pill">Voice · Gestures · Smart Home</div>
+			<div class="pill">Voice · Motion · Smart Home</div>
 			<div class="version-pill" id="version-pill">v1.0.4</div>
 		</div>
 		<div class="hero-grid">
@@ -25,7 +25,7 @@
 				<p class="eyebrow">Reachy Mini App</p>
 				<h1>Your robot meets your Home Assistant.</h1>
 				<p class="lede">
-					Transform Reachy Mini Wi-Fi into a voice-controlled smart home hub. Natural conversations, expressive movements, gesture recognition — all seamlessly connected to Home Assistant.
+					Transform Reachy Mini Wi-Fi into a voice-controlled smart home hub. Natural conversations, expressive movements, camera streaming, and sound-source orientation — all connected to Home Assistant.
 				</p>
 				<div class="hero-actions">
 					<a class="btn primary" href="#requirements">Requirements</a>
@@ -34,9 +34,9 @@
 				</div>
 				<div class="hero-badges">
 					<span>🎤 Wake Word</span>
-					<span>👀 Face Tracking</span>
+					<span>🎯 Sound Tracking</span>
 					<span>🔄 Body Following</span>
-					<span>🤚 18 Gestures</span>
+					<span>📹 Camera Stream</span>
 					<span>🔊 Multi-room Audio</span>
 					<span>⚡ Zero Config</span>
 					<span>🃏 Dashboard Card</span>
@@ -131,14 +131,14 @@
 				<p>Full Home Assistant integration. Control lights, switches, climate, media — anything in your Home Assistant.</p>
 			</div>
 			<div class="feature-card">
-				<span class="icon">👀</span>
-				<h3>Face Tracking</h3>
-				<p>YOLO-based face detection with body following. Head and body move together naturally to track you during conversations.</p>
+				<span class="icon">🎯</span>
+				<h3>Sound-Source Orientation</h3>
+				<p>Direction-of-arrival data turns the robot toward the speaker on wake, with smooth head and body motion.</p>
 			</div>
 			<div class="feature-card">
-				<span class="icon">🤚</span>
-				<h3>Gesture Detection</h3>
-				<p>HaGRID ONNX models recognize hand gestures and publish the detected gesture label and confidence to Home Assistant entities.</p>
+				<span class="icon">🎛️</span>
+				<h3>Manual Pose Control</h3>
+				<p>Home Assistant number entities control head pose, body yaw, and antennas, including smooth manual yaw hold.</p>
 			</div>
 			<div class="feature-card">
 				<span class="icon">😊</span>
@@ -236,7 +236,7 @@
 				<h3>HA Dashboard Card</h3>
 				<p>Lovelace Card for HA</p>
 			</a>
-			<a href="https://github.com/ha-china/Reachy_Mini_For_Home_Assistant" target="_blank" class="link-card">
+			<a href="https://github.com/cuichaobaobao/Reachy_Mini_For_Home_Assistant" target="_blank" class="link-card">
 				<span class="icon">📦</span>
 				<h3>Source Code</h3>
 				<p>GitHub Repository</p>
@@ -271,22 +271,22 @@
 				<h3>microWakeWord</h3>
 				<p>Wake Word Detection</p>
 			</a>
-			<a href="https://huggingface.co/AdamCodd/YOLOv11n-face-detection" target="_blank" class="link-card">
-				<span class="icon">👀</span>
-				<h3>YOLOv11n-face</h3>
-				<p>Face Detection Model</p>
+			<a href="https://hf.co/docs/reachy_mini/SDK/python-sdk" target="_blank" class="link-card">
+				<span class="icon">📚</span>
+				<h3>Reachy Mini SDK</h3>
+				<p>Python SDK Documentation</p>
 			</a>
-			<a href="https://github.com/ai-forever/dynamic_gestures" target="_blank" class="link-card">
-				<span class="icon">✋</span>
-				<h3>Dynamic Gestures</h3>
-				<p>Reference Project</p>
+			<a href="https://frigate.video/" target="_blank" class="link-card">
+				<span class="icon">📹</span>
+				<h3>Frigate</h3>
+				<p>External Video Analysis</p>
 			</a>
 			<a href="https://github.com/Sendspin/sendspin-cli" target="_blank" class="link-card">
 				<span class="icon">🔊</span>
 				<h3>Sendspin</h3>
 				<p>Multi-room Audio</p>
 			</a>
-			<a href="https://huggingface.co/spaces/pollen-robotics/reachy-mini-landing-page#apps" target="_blank" class="link-card">
+			<a href="https://hf.co/spaces/pollen-robotics/reachy-mini-landing-page#apps" target="_blank" class="link-card">
 				<span class="icon">🛒</span>
 				<h3>Reachy Mini App Store</h3>
 				<p>More Apps</p>
