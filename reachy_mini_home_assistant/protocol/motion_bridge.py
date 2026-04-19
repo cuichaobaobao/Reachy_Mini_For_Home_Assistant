@@ -64,14 +64,6 @@ def reachy_on_idle(protocol: "VoiceSatelliteProtocol") -> None:
     protocol._behavior_controller.handle_voice_phase(VOICE_PHASE_IDLE)
 
 
-def set_conversation_mode(protocol: "VoiceSatelliteProtocol", in_conversation: bool) -> None:
-    if protocol.camera_server is not None:
-        try:
-            protocol.camera_server.set_conversation_mode(in_conversation)
-        except Exception as e:
-            _LOGGER.debug("Failed to set conversation mode: %s", e)
-
-
 def reachy_on_timer_finished(protocol: "VoiceSatelliteProtocol") -> None:
     protocol._behavior_controller.execute_skill(SKILL_TIMER_ALERT, context="timer_finished")
 
@@ -94,22 +86,8 @@ def queue_emotion_move(protocol: "VoiceSatelliteProtocol", emotion_name: str) ->
         _LOGGER.error("Error playing emotion %s: %s", emotion_name, e)
 
 
-def set_face_tracking_for_state(protocol: "VoiceSatelliteProtocol", enabled: bool, context: str) -> None:
-    if protocol.camera_server is None:
-        return
-    try:
-        protocol.camera_server.set_face_tracking_enabled(enabled)
-        _LOGGER.debug("Face tracking %s during %s", "enabled" if enabled else "paused", context)
-    except Exception as e:
-        _LOGGER.debug("Failed to update face tracking during %s: %s", context, e)
-
-
-def enter_motion_state(
-    protocol: "VoiceSatelliteProtocol", context: str, callback_name: str, *, face_tracking: bool | None = None
-) -> None:
+def enter_motion_state(protocol: "VoiceSatelliteProtocol", context: str, callback_name: str) -> None:
     protocol._cancel_delayed_idle_return()
-    if face_tracking is not None:
-        set_face_tracking_for_state(protocol, face_tracking, context)
     run_motion_state(protocol, context, callback_name)
 
 

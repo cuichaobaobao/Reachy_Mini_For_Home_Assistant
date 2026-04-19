@@ -1,4 +1,4 @@
-﻿"""Entity setup helpers for sensors, diagnostics, and motion control entities."""
+"""Entity setup helpers for sensors, diagnostics, and motion control entities."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from ..core.system_diagnostics import get_system_diagnostics
-from .entity import BinarySensorEntity, TextSensorEntity
+from .entity import BinarySensorEntity
 from .entity_extensions import SensorEntity, SwitchEntity
 from .entity_factory import (
     create_entity,
@@ -139,48 +139,6 @@ def setup_imu_entities(registry: "EntityRegistry", entities: list) -> None:
             "imu_temperature": rc.get_imu_temperature,
         },
     )
-
-
-def setup_detection_entities(registry: "EntityRegistry", entities: list) -> None:
-    def get_gesture() -> str:
-        return registry.camera_server.get_current_gesture() if registry.camera_server else "none"
-
-    def get_gesture_confidence() -> float:
-        return registry.camera_server.get_gesture_confidence() if registry.camera_server else 0.0
-
-    registry._gesture_entity = TextSensorEntity(
-        server=registry.server,
-        key=get_entity_key("gesture_detected"),
-        name="Gesture Detected",
-        object_id="gesture_detected",
-        icon="mdi:hand-wave",
-        value_getter=get_gesture,
-    )
-    entities.append(registry._gesture_entity)
-
-    registry._gesture_confidence_entity = SensorEntity(
-        server=registry.server,
-        key=get_entity_key("gesture_confidence"),
-        name="Gesture Confidence",
-        object_id="gesture_confidence",
-        icon="mdi:percent",
-        unit_of_measurement="%",
-        accuracy_decimals=1,
-        state_class="measurement",
-        value_getter=get_gesture_confidence,
-    )
-    entities.append(registry._gesture_confidence_entity)
-
-    registry._face_detected_entity = BinarySensorEntity(
-        server=registry.server,
-        key=get_entity_key("face_detected"),
-        name="Face Detected",
-        object_id="face_detected",
-        icon="mdi:face-recognition",
-        device_class="occupancy",
-        value_getter=lambda: registry.camera_server.is_face_detected() if registry.camera_server else False,
-    )
-    entities.append(registry._face_detected_entity)
 
 
 def setup_diagnostic_entities(registry: "EntityRegistry", entities: list) -> None:

@@ -37,7 +37,6 @@ from .control_runtime import (
     issue_control_command,
     run_control_loop,
     update_emotion_move,
-    update_face_tracking,
 )
 from .emotion_moves import EmotionMove, is_emotion_available
 from .idle_runtime import (
@@ -72,10 +71,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 100
 MAX_CONTROL_DT_S = 0.05
 
-# Animation suppression when face detected
-FACE_DETECTED_THRESHOLD = 0.001  # Minimum offset magnitude to consider face detected
-ANIMATION_BLEND_DURATION = 0.18  # Seconds to blend animation back when face lost
-FACE_TRACKING_ANIMATION_BLEND = 0.35
 IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.4  # Slightly longer fade avoids visible idle/action handoff steps
 IDLE_ACTION_ANTENNA_SUPPRESSION = 0.25  # Keep idle antenna motion mostly continuous during idle actions
 ANTENNA_LARGE_MOVE_THRESHOLD_RAD = 1.0
@@ -211,10 +206,6 @@ class MovementManager:
         self._idle_action_animation_suppression = 0.0
         self._manual_head_yaw_hold = False
 
-        # Face tracking offsets (from camera worker)
-        self._face_tracking_offsets: tuple[float, float, float, float, float, float] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        self._face_tracking_lock = threading.Lock()
-
         # Last sent pose for change detection (reduce daemon load)
         self._last_sent_head_pose: np.ndarray | None = None
         self._last_sent_antennas: tuple[float, float] | None = None
@@ -232,16 +223,6 @@ class MovementManager:
         # Body yaw smoothing state (rate-limited)
         self._body_yaw_smoothed: float | None = None
         self._last_body_yaw_update = 0.0
-
-        # Camera server reference for face tracking
-        self._camera_server = None
-
-        # Face tracking smoothing - DISABLED to match reference project
-        # Reference project applies face tracking offsets directly without smoothing
-        # Smoothing causes "lag" and "trailing" that looks unnatural
-        # Only smooth interpolation when face is lost (handled in camera_server.py)
-        self._smoothed_face_offsets: list[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        # self._face_smoothing_factor = 0.3  # DISABLED - direct application instead
 
         # Emotion move playback state
         self._emotion_move: EmotionMove | None = None
@@ -535,15 +516,6 @@ class MovementManager:
         )
         self._enqueue_command("action", action, "idle_rest", timeout=0)
 
-    def set_camera_server(self, camera_server) -> None:
-        """Set the camera server for face tracking offsets.
-
-        Args:
-            camera_server: MJPEGCameraServer instance with face tracking
-        """
-        self._camera_server = camera_server
-        logger.info("Camera server set for face tracking")
-
     # =========================================================================
     # DOA (Direction of Arrival) Sound Tracking API
     # =========================================================================
@@ -605,9 +577,6 @@ class MovementManager:
         if not self._doa_enabled:
             return False
 
-        # Update face detection state for DOA tracker
-        self._doa_tracker.set_face_detected(self.state.face_detected)
-
         # Update conversation state
         in_conversation = self.state.robot_state in (
             RobotState.LISTENING,
@@ -637,15 +606,6 @@ class MovementManager:
             logger.debug("DOA turn queued: %.1f° over %.1fs", yaw_degrees, duration)
         except Exception:
             logger.warning("Command queue full, dropping doa_turn command")
-
-    def set_face_tracking_offsets(self, offsets: tuple[float, float, float, float, float, float]) -> None:
-        """Thread-safe: Update face tracking offsets manually.
-
-        Args:
-            offsets: Tuple of (x, y, z, roll, pitch, yaw) in meters/radians
-        """
-        with self._face_tracking_lock:
-            self._face_tracking_offsets = offsets
 
     def set_target_pose(
         self,
@@ -912,25 +872,7 @@ class MovementManager:
         self._antenna_controller.update(dt)
 
     def _update_animation_blend(self) -> None:
-        """Update animation blend factor when face is lost.
-
-        Keep existing idle/speaking features active, but reduce idle animation
-        weight while face tracking is actively steering the head.
-        """
-        target_blend = FACE_TRACKING_ANIMATION_BLEND if self.state.face_detected else 1.0
-        current_blend = self.state.animation_blend
-        if abs(target_blend - current_blend) < 1e-3:
-            self.state.animation_blend = target_blend
-            return
-
-        step = self._target_period / max(1e-3, ANIMATION_BLEND_DURATION)
-        if target_blend > current_blend:
-            self.state.animation_blend = min(target_blend, current_blend + step)
-        else:
-            self.state.animation_blend = max(target_blend, current_blend - step)
-
-    def _update_face_tracking(self) -> None:
-        update_face_tracking(self, FACE_DETECTED_THRESHOLD)
+        self.state.animation_blend = 1.0
 
     def _update_idle_look_around(self) -> None:
         update_idle_look_around(
@@ -977,7 +919,7 @@ class MovementManager:
     # =========================================================================
 
     def _control_loop(self) -> None:
-        run_control_loop(self, max_control_dt_s=MAX_CONTROL_DT_S, face_detected_threshold=FACE_DETECTED_THRESHOLD)
+        run_control_loop(self, max_control_dt_s=MAX_CONTROL_DT_S)
 
     # =========================================================================
     # Lifecycle

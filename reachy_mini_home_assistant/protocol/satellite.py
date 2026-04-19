@@ -44,7 +44,6 @@ from .motion_bridge import (
     reachy_on_thinking,
     reachy_on_timer_finished,
     run_motion_state,
-    set_conversation_mode,
     turn_to_sound_source,
 )
 from .session_flow import (
@@ -142,14 +141,13 @@ class VoiceSatelliteProtocol(APIServer):
         # Initialize entity registry
         self._entity_registry = create_entity_registry(self)
 
-        # Connect gesture state callback
+        # Camera server is pure video; no face/gesture callbacks are registered.
         bind_camera_callbacks(self, camera_server)
 
         self._event_emotion_mapper = EventEmotionMapper()
         self._behavior_controller = BuiltinBehaviorController(
             event_mapper=self._event_emotion_mapper,
             cancel_delayed_idle_return=self._cancel_delayed_idle_return,
-            set_conversation_mode=self._set_conversation_mode,
             enter_motion_state=self._enter_motion_state,
             run_motion_state=self._run_motion_state,
             queue_emotion_move=self._queue_emotion_move,
@@ -285,13 +283,8 @@ class VoiceSatelliteProtocol(APIServer):
     def _schedule_delayed_idle_return(self) -> None:
         schedule_delayed_idle_return(self, IDLE_RETURN_DELAY_S)
 
-    def _set_face_tracking_for_state(self, enabled: bool, context: str) -> None:
-        from .motion_bridge import set_face_tracking_for_state
-
-        set_face_tracking_for_state(self, enabled, context)
-
-    def _enter_motion_state(self, context: str, callback_name: str, *, face_tracking: bool | None = None) -> None:
-        enter_motion_state(self, context, callback_name, face_tracking=face_tracking)
+    def _enter_motion_state(self, context: str, callback_name: str) -> None:
+        enter_motion_state(self, context, callback_name)
 
     def _run_motion_state(self, context: str, callback_name: str) -> None:
         run_motion_state(self, context, callback_name)
@@ -346,9 +339,6 @@ class VoiceSatelliteProtocol(APIServer):
 
     def _reachy_on_idle(self) -> None:
         reachy_on_idle(self)
-
-    def _set_conversation_mode(self, in_conversation: bool) -> None:
-        set_conversation_mode(self, in_conversation)
 
     def _reachy_on_timer_finished(self) -> None:
         reachy_on_timer_finished(self)

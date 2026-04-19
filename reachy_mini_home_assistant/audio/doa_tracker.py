@@ -44,7 +44,7 @@ class DOATracker:
 
     This class monitors DOA (Direction of Arrival) data from the microphone
     array and triggers smooth head turns towards sound sources when the
-    robot is idle and not tracking a face.
+    robot is idle and not in an active conversation.
 
     Usage:
         tracker = DOATracker(movement_callback=robot.turn_to_angle)
@@ -70,7 +70,6 @@ class DOATracker:
 
         # State
         self._enabled = True
-        self._face_detected = False
         self._in_conversation = False
         self._last_angle: float = 0.0
         self._last_turn_time: float = 0.0
@@ -94,13 +93,6 @@ class DOATracker:
             logger.debug("DOA tracking enabled")
         else:
             logger.debug("DOA tracking disabled")
-
-    def set_face_detected(self, detected: bool) -> None:
-        """Update face detection state.
-
-        DOA tracking is suppressed when a face is detected.
-        """
-        self._face_detected = detected
 
     def set_conversation_mode(self, in_conversation: bool) -> None:
         """Update conversation mode state.
@@ -172,9 +164,6 @@ class DOATracker:
     def _should_track(self) -> bool:
         """Check if DOA tracking should be active."""
         if not self._enabled:
-            return False
-
-        if self._face_detected:
             return False
 
         return not self._in_conversation

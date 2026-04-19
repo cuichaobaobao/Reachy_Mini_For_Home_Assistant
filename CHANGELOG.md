@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory Leak Root Cause** - Audio buffer array creation in loop causing unbounded memory growth
 - **Indentation Error** - Fix indentation in audio_player.py stop_sendspin method
 
+## [1.0.9] - 2026-04-19
+
+### Removed
+- Remove robot-side face tracking and gesture detection, including their Home Assistant switches/sensors and bundled vision AI model files.
+- Remove YOLO/ONNX/PyTorch vision AI runtime dependencies while keeping OpenCV for MJPEG encoding.
+
+### Changed
+- Keep the camera server as a pure MJPEG video stream for Home Assistant and external vision services.
+- Preserve 15fps active streaming and reduce JPEG quality from 80 to 75 for lower bandwidth/encoding pressure without sacrificing smoothness.
+- Refresh frames at 1fps when no stream client is connected, keeping snapshots available with lower idle load.
+
+### Fixed
+- Prevent voice-state transitions from re-enabling face tracking after the user intends vision AI to stay disabled.
+
 ## [1.0.8] - 2026-04-15
 
 ### Changed

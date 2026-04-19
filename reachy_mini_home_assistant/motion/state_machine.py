@@ -84,10 +84,7 @@ class MovementState:
     next_look_around_time: float = 0.0
     look_around_in_progress: bool = False
 
-    # Face tracking animation suppression
-    face_detected: bool = False
-    face_lost_time: float = 0.0
-    animation_blend: float = 1.0  # 0=suppressed (face tracking), 1=full animation
+    animation_blend: float = 1.0
 
 
 @dataclass

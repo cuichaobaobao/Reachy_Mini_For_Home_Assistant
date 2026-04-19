@@ -1,4 +1,4 @@
-﻿"""Pose and control loop helpers for `MovementManager`."""
+"""Pose and control loop helpers for `MovementManager`."""
 
 from __future__ import annotations
 
@@ -17,30 +17,6 @@ if TYPE_CHECKING:
     from .movement_manager import MovementManager
 
 logger = logging.getLogger(__name__)
-
-
-def update_face_tracking(manager: "MovementManager", face_detected_threshold: float) -> None:
-    if manager._camera_server is None:
-        return
-    try:
-        raw_offsets = manager._camera_server.get_face_tracking_offsets()
-        offsets_for_motion = raw_offsets
-        if manager.state.robot_state == RobotState.IDLE and not manager._idle_motion_enabled:
-            offsets_for_motion = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        with manager._face_tracking_lock:
-            manager._face_tracking_offsets = offsets_for_motion
-        offset_magnitude = sum(abs(o) for o in raw_offsets)
-        face_now_detected = offset_magnitude > face_detected_threshold
-        if face_now_detected:
-            if not manager.state.face_detected:
-                logger.debug("Face detected")
-            manager.state.face_detected = True
-        else:
-            if manager.state.face_detected:
-                logger.debug("Face lost")
-            manager.state.face_detected = False
-    except Exception as e:
-        logger.debug("Error getting face tracking offsets: %s", e)
 
 
 def update_emotion_move(manager: "MovementManager") -> tuple[np.ndarray, tuple[float, float], float] | None:
@@ -73,16 +49,14 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
         pitch=manager.state.target_pitch,
         yaw=manager.state.target_yaw,
     )
-    with manager._face_tracking_lock:
-        face_offsets = manager._face_tracking_offsets
     anim_blend = manager.state.animation_blend
     secondary_head = create_head_pose_matrix(
-        x=manager.state.anim_x * anim_blend + manager.state.sway_x + face_offsets[0],
-        y=manager.state.anim_y * anim_blend + manager.state.sway_y + face_offsets[1],
-        z=manager.state.anim_z * anim_blend + manager.state.sway_z + face_offsets[2],
-        roll=manager.state.anim_roll * anim_blend + manager.state.sway_roll + face_offsets[3],
-        pitch=manager.state.anim_pitch * anim_blend + manager.state.sway_pitch + face_offsets[4],
-        yaw=manager.state.anim_yaw * anim_blend + manager.state.sway_yaw + face_offsets[5],
+        x=manager.state.anim_x * anim_blend + manager.state.sway_x,
+        y=manager.state.anim_y * anim_blend + manager.state.sway_y,
+        z=manager.state.anim_z * anim_blend + manager.state.sway_z,
+        roll=manager.state.anim_roll * anim_blend + manager.state.sway_roll,
+        pitch=manager.state.anim_pitch * anim_blend + manager.state.sway_pitch,
+        yaw=manager.state.anim_yaw * anim_blend + manager.state.sway_yaw,
     )
     final_head = compose_poses(primary_head, secondary_head)
 
@@ -103,7 +77,6 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
     )
     if (
         manager.state.robot_state == RobotState.IDLE
-        and not manager.state.face_detected
         and not manager._manual_head_yaw_hold
         and not active_turn_action
     ):
@@ -116,7 +89,7 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
     else:
         dt = max(1e-6, now - manager._last_body_yaw_update)
         max_rate_rad_s = math.radians(Config.motion.body_yaw_max_rate_deg_s)
-        if manager.state.face_detected or manager.state.robot_state != RobotState.IDLE or active_turn_action:
+        if manager.state.robot_state != RobotState.IDLE or active_turn_action:
             max_rate_rad_s *= 1.15
         max_step = max_rate_rad_s * dt
         delta = target_body_yaw - manager._body_yaw_smoothed
@@ -177,7 +150,7 @@ def issue_control_command(manager: "MovementManager", head_pose: np.ndarray, ant
             manager._log_error_throttled(f"Failed to set robot target: {error_msg}")
 
 
-def run_control_loop(manager: "MovementManager", *, max_control_dt_s: float, face_detected_threshold: float) -> None:
+def run_control_loop(manager: "MovementManager", *, max_control_dt_s: float) -> None:
     logger.info("Movement manager control loop started (%.1f Hz)", manager._control_loop_hz)
     last_time = manager._now()
     while not manager._stop_event.is_set():
@@ -197,7 +170,6 @@ def run_control_loop(manager: "MovementManager", *, max_control_dt_s: float, fac
                 manager._update_action(dt)
                 manager._update_animation(dt)
                 manager._update_antenna_blend(dt)
-                manager._update_face_tracking()
                 manager._update_animation_blend()
                 manager._update_idle_look_around()
                 head_pose, antennas, body_yaw = manager._compose_final_pose()

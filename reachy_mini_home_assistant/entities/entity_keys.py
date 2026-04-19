@@ -21,9 +21,6 @@ ENTITY_KEYS: dict[str, int] = {
     "speaker_volume": 103,
     "idle_behavior_enabled": 104,
     "sendspin_enabled": 105,
-    "face_tracking_enabled": 106,
-    "gesture_detection_enabled": 107,
-    "face_confidence_threshold": 108,
     "camera_disabled": 109,
     # Phase 2: Runtime controls (200-299)
     "motor_mode": 201,
@@ -67,11 +64,6 @@ ENTITY_KEYS: dict[str, int] = {
     "camera": 1001,
     # Phase 21: Continuous conversation (1500-1599)
     "continuous_conversation": 1500,
-    # Phase 22: Gesture detection (1600-1699)
-    "gesture_detected": 1600,
-    "gesture_confidence": 1601,
-    # Phase 23: Face detection (1700-1799)
-    "face_detected": 1700,
     # Phase 24: System diagnostics (1800-1899)
     "sys_cpu_percent": 1800,
     "sys_cpu_temperature": 1801,

@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.9",
+    "date": "2026-04-19",
+    "changes": [
+      "Build: Bump package version to 1.0.9",
+      "Remove: Delete robot-side face tracking and gesture detection, including Home Assistant switches/sensors and bundled vision AI model files",
+      "Remove: Drop YOLO/ONNX/PyTorch vision AI runtime dependencies while keeping OpenCV for MJPEG encoding",
+      "Change: Keep the camera server as a pure MJPEG video stream for Home Assistant and external vision services",
+      "Change: Preserve 15fps active streaming and reduce JPEG quality from 80 to 75 for lower bandwidth and encoding pressure",
+      "Change: Refresh frames at 1fps when no stream client is connected, keeping snapshots available with lower idle load",
+      "Fix: Prevent voice-state transitions from re-enabling face tracking after vision AI has been removed"
+    ]
+  },
+  {
     "version": "1.0.8",
     "date": "2026-04-15",
     "changes": [

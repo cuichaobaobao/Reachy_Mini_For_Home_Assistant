@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini_home_assistant_custom"
-version = "1.0.8"
+version = "1.0.9"
 description = "Deep integration of Reachy Mini robot with Home Assistant"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -33,19 +33,8 @@ dependencies = [
     # Motion control (head movements)
     "scipy>=1.15.3,<2.0.0",
 
-    # Face tracking (YOLO-based head detection)
-    "ultralytics",
-    "supervision",
-
     # Sendspin synchronized audio (optional, for multi-room playback)
     "aiosendspin>=4.4.0",
-
-    # Gesture detection (ONNX runtime for HaGRID models)
-    "onnxruntime>=1.18.0",
-
-    # PyTorch (for vision models)
-    "torch==2.5.1",
-    "torchvision==0.20.1",
 
     # Compatibility with system packages (gradio, etc.)
     "pillow<12.0",
@@ -65,7 +54,7 @@ include-package-data = true
 where = ["."]
 
 [tool.setuptools.package-data]
-"*" = ["*.json", "*.flac", "*.md", "*.tflite", "*.onnx", "*.pt"]
+"*" = ["*.json", "*.flac", "*.md", "*.tflite"]
 
 # ============================================================================
 # Ruff - Fast Python linter and formatter

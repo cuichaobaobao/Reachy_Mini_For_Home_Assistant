@@ -1,7 +1,7 @@
 """Reachy Mini motion control integration.
 
 This module provides a high-level motion API that delegates to the
-MovementManager for unified 5Hz control with face tracking.
+MovementManager for unified control.
 """
 
 import logging
@@ -21,7 +21,7 @@ class ReachyMiniMotion:
     def __init__(self, reachy_mini):
         self.reachy_mini = reachy_mini
         self._movement_manager: MovementManager | None = None
-        self._camera_server = None  # Reference to camera server for face tracking control
+        self._camera_server = None
         self._is_speaking = False
 
         _LOGGER.debug("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
@@ -43,15 +43,8 @@ class ReachyMiniMotion:
             self._movement_manager.robot = reachy_mini
 
     def set_camera_server(self, camera_server):
-        """Set the camera server for face tracking.
-
-        Args:
-            camera_server: MJPEGCameraServer instance with face tracking enabled
-        """
+        """Store the camera server reference for lifecycle coordination."""
         self._camera_server = camera_server
-        if self._movement_manager is not None:
-            self._movement_manager.set_camera_server(camera_server)
-            _LOGGER.info("Camera server connected for face tracking")
 
     def start(self):
         """Start the movement manager control loop."""
@@ -80,16 +73,12 @@ class ReachyMiniMotion:
         """Called when wake word is detected.
 
         Non-blocking: command sent to MovementManager.
-        Face tracking is always enabled, so robot will look at user automatically.
         """
         _LOGGER.debug("on_wakeup called")
         if self._movement_manager is None:
             _LOGGER.warning("on_wakeup: movement_manager is None, skipping motion")
             return
 
-        # Face tracking is always enabled, no need to enable it here
-
-        # Set listening state - face tracking will handle looking at user
         self._movement_manager.set_state(RobotState.LISTENING)
         _LOGGER.info("Wake word detected, entering listening state")
 
@@ -167,7 +156,6 @@ class ReachyMiniMotion:
         """Called when returning to idle state.
 
         Non-blocking: command sent to MovementManager.
-        Face tracking remains enabled for continuous tracking.
         """
         if self._movement_manager is None:
             return
@@ -180,15 +168,11 @@ class ReachyMiniMotion:
             else:
                 self._movement_manager.transition_to_idle_rest(duration=2.6)
 
-        # Note: Face tracking remains enabled for continuous tracking
-        # This allows the robot to always look at the user when they approach
-
         _LOGGER.debug("Reachy Mini: Idle pose")
 
     def on_pause_motion(self):
         """Called when motion should settle immediately.
 
-        Used for zero-config gesture reactions such as the palm gesture.
         The robot smoothly returns to a neutral pose and then resumes its
         normal idle behavior.
         """

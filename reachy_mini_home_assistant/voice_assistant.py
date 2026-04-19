@@ -211,7 +211,6 @@ class VoiceAssistantService:
                 _LOGGER.info("Reachy Mini media system initialized")
 
                 # Body yaw now follows head yaw in movement_manager.py
-                # This enables natural body rotation when tracking faces
 
         except Exception as e:
             _LOGGER.warning("Failed to initialize Reachy Mini media: %s", e)
@@ -477,17 +476,11 @@ class VoiceAssistantService:
                     reachy_mini=self.reachy_mini,
                     host=self.host,
                     port=self.camera_port,
-                    fps=15,
-                    quality=80,
-                    enable_face_tracking=bool(self._state.preferences.face_tracking_enabled),
-                    enable_gesture_detection=bool(self._state.preferences.gesture_detection_enabled),
+                    fps=Config.camera.fps_high,
+                    quality=Config.camera.quality,
+                    idle_fps=Config.camera.fps_idle,
                     gstreamer_lock=self._gstreamer_lock,
                 )
-
-                prefs = self._state.preferences
-                self._camera_server.set_face_tracking_enabled(bool(prefs.face_tracking_enabled))
-                self._camera_server.set_gesture_detection_enabled(bool(prefs.gesture_detection_enabled))
-                self._camera_server.set_face_confidence_threshold(float(prefs.face_confidence_threshold))
 
                 await self._camera_server.start()
 

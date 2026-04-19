@@ -1,11 +1,11 @@
 """Pose composition module for Reachy Mini.
 
 This module provides utilities for composing robot head poses from
-multiple sources (target, animation, face tracking, speech sway).
+multiple sources (target, animation, speech sway).
 
 The composition logic follows the reachy_mini_conversation_app approach:
 1. Build primary pose from target state
-2. Build secondary pose from animation + face tracking + speech sway
+2. Build secondary pose from animation + speech sway
 3. Compose using SDK's compose_world_offset for proper rotation composition
 """
 
@@ -132,7 +132,6 @@ def clamp_body_yaw(yaw: float) -> float:
 def compose_full_pose(
     target: PoseComponents,
     animation: PoseComponents,
-    face_offsets: tuple[float, float, float, float, float, float],
     sway: PoseComponents,
     animation_blend: float = 1.0,
 ) -> tuple[np.ndarray, float]:
@@ -141,7 +140,6 @@ def compose_full_pose(
     Args:
         target: Target pose components
         animation: Animation pose components
-        face_offsets: Face tracking offsets (x, y, z, roll, pitch, yaw)
         sway: Speech sway pose components
         animation_blend: Blend factor for animation (0=suppressed, 1=full)
 
@@ -167,12 +165,12 @@ def compose_full_pose(
     anim_yaw = animation.yaw * animation_blend
 
     # Combine secondary sources
-    secondary_x = anim_x + sway.x + face_offsets[0]
-    secondary_y = anim_y + sway.y + face_offsets[1]
-    secondary_z = anim_z + sway.z + face_offsets[2]
-    secondary_roll = anim_roll + sway.roll + face_offsets[3]
-    secondary_pitch = anim_pitch + sway.pitch + face_offsets[4]
-    secondary_yaw = anim_yaw + sway.yaw + face_offsets[5]
+    secondary_x = anim_x + sway.x
+    secondary_y = anim_y + sway.y
+    secondary_z = anim_z + sway.z
+    secondary_roll = anim_roll + sway.roll
+    secondary_pitch = anim_pitch + sway.pitch
+    secondary_yaw = anim_yaw + sway.yaw
 
     # Build secondary head pose
     secondary_head = create_head_pose_matrix(

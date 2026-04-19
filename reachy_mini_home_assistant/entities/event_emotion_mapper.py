@@ -337,14 +337,12 @@ class BuiltinBehaviorController:
         *,
         event_mapper: EventEmotionMapper,
         cancel_delayed_idle_return: Callable[[], None],
-        set_conversation_mode: Callable[[bool], None],
-        enter_motion_state: Callable[[str, str, bool | None], None],
+        enter_motion_state: Callable[[str, str], None],
         run_motion_state: Callable[[str, str], None],
         queue_emotion_move: Callable[[str], None],
     ) -> None:
         self._event_mapper = event_mapper
         self._cancel_delayed_idle_return = cancel_delayed_idle_return
-        self._set_conversation_mode = set_conversation_mode
         self._enter_motion_state = enter_motion_state
         self._run_motion_state = run_motion_state
         self._queue_emotion_move = queue_emotion_move
@@ -352,21 +350,19 @@ class BuiltinBehaviorController:
     def handle_voice_phase(self, phase: str) -> None:
         """Run the built-in robot behavior for a voice phase."""
         if phase == VOICE_PHASE_LISTENING:
-            self._set_conversation_mode(True)
-            self._enter_motion_state(phase, "on_listening", face_tracking=True)
+            self._enter_motion_state(phase, "on_listening")
             return
 
         if phase == VOICE_PHASE_THINKING:
-            self._enter_motion_state(phase, "on_thinking", face_tracking=True)
+            self._enter_motion_state(phase, "on_thinking")
             return
 
         if phase == VOICE_PHASE_SPEAKING:
-            self._enter_motion_state(phase, "on_speaking_start", face_tracking=False)
+            self._enter_motion_state(phase, "on_speaking_start")
             return
 
         if phase == VOICE_PHASE_IDLE:
-            self._set_conversation_mode(False)
-            self._enter_motion_state(phase, "on_idle", face_tracking=True)
+            self._enter_motion_state(phase, "on_idle")
             return
 
         logger.debug("Unhandled built-in voice phase: %s", phase)

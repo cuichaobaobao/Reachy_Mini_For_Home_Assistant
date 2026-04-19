@@ -9,7 +9,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Optional
 
 from ..models import Preferences
-from .entity import BinarySensorEntity, NumberEntity, TextSensorEntity
+from .entity import BinarySensorEntity, NumberEntity
 from .entity_extensions import SwitchEntity
 from .entity_keys import get_entity_key
 from .runtime_entity_setup import (
@@ -21,7 +21,6 @@ from .runtime_entity_setup import (
 from .sensor_entity_setup import (
     append_defined_entities,
     setup_audio_direction_entities,
-    setup_detection_entities,
     setup_diagnostic_entities,
     setup_imu_entities,
     setup_motion_entities,
@@ -60,14 +59,6 @@ class EntityRegistry:
 
         # Runtime state entities
         self._services_suspended_entity: BinarySensorEntity | None = None
-        self._face_detected_entity: BinarySensorEntity | None = None
-        self._gesture_entity: TextSensorEntity | None = None
-        self._gesture_confidence_entity: SensorEntity | None = None
-
-        # Gesture detection state
-        self._current_gesture = "none"
-        self._gesture_confidence = 0.0
-
         # Emotion state
         self._current_emotion = "None"
         # Map emotion names to available robot emotions
@@ -149,23 +140,6 @@ class EntityRegistry:
             setattr(prefs, key, value)
             self._save_preferences()
 
-    def _idle_behavior_allows_vision(self) -> bool:
-        prefs = self._get_preferences()
-        return bool(prefs.idle_behavior_enabled) if prefs is not None else False
-
-    def _apply_vision_runtime_state(self) -> None:
-        if self.camera_server is None:
-            return
-
-        prefs = self._get_preferences()
-        if prefs is None:
-            self.camera_server.set_face_tracking_enabled(False)
-            self.camera_server.set_gesture_detection_enabled(False)
-            return
-
-        self.camera_server.set_face_tracking_enabled(bool(prefs.face_tracking_enabled))
-        self.camera_server.set_gesture_detection_enabled(bool(prefs.gesture_detection_enabled))
-
     def _get_pref_bool(self, key: str, default: bool = False) -> bool:
         prefs = self._get_preferences()
         return bool(getattr(prefs, key, default)) if prefs is not None else default
@@ -193,8 +167,6 @@ class EntityRegistry:
         if prefs is not None:
             prefs.set_idle_behavior_enabled(enabled)
             self._save_preferences()
-
-        self._apply_vision_runtime_state()
 
     def _make_preference_switch(
         self,
@@ -308,8 +280,7 @@ class EntityRegistry:
         # Phase 14 (head_joints, passive_joints) removed - not needed
         # Phase 20 (Tap detection) disabled - too many false triggers
         self._setup_phase21_entities(entities)
-        self._setup_phase22_entities(entities)
-        self._setup_phase23_entities(entities)
+        # Phase 22/23 vision AI entities removed; video stream remains in Phase 10.
         self._setup_phase24_entities(entities)  # System diagnostics
 
         _LOGGER.info("All entities registered: %d total", len(entities))
@@ -351,24 +322,6 @@ class EntityRegistry:
 
     def _setup_phase21_entities(self, entities: list) -> None:
         pass
-
-    def _setup_phase22_entities(self, entities: list) -> None:
-        setup_detection_entities(self, entities)
-
-    def _setup_phase23_entities(self, entities: list) -> None:
-        pass
-
-    def update_face_detected_state(self) -> None:
-        """Push face_detected state update to Home Assistant."""
-        if self._face_detected_entity:
-            self._face_detected_entity.update_state()
-
-    def update_gesture_state(self) -> None:
-        """Push gesture state update to Home Assistant."""
-        if self._gesture_entity:
-            self._gesture_entity.update_state()
-        if self._gesture_confidence_entity:
-            self._gesture_confidence_entity.update_state()
 
     def set_services_suspended(self, is_suspended: bool) -> None:
         """Update the services suspended state and push to Home Assistant.
