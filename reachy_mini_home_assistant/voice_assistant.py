@@ -16,10 +16,8 @@ from collections import deque
 from dataclasses import dataclass, field, fields
 from pathlib import Path
 from queue import Queue
-from typing import TYPE_CHECKING
 
 import numpy as np
-import requests
 from reachy_mini import ReachyMini
 
 from .audio.audio_player import AudioPlayer
@@ -30,16 +28,13 @@ from .motion.reachy_motion import ReachyMiniMotion
 from .protocol.satellite import VoiceSatelliteProtocol
 from .protocol.zeroconf import HomeAssistantZeroconf, get_default_friendly_name
 
-if TYPE_CHECKING:
-    from pymicro_wakeword import MicroWakeWord
-    from pyopen_wakeword import OpenWakeWord
-
 _LOGGER = logging.getLogger(__name__)
 
 _MODULE_DIR = Path(__file__).parent
 _WAKEWORDS_DIR = _MODULE_DIR / "wakewords"
 _SOUNDS_DIR = _MODULE_DIR / "sounds"
 _LOCAL_DIR = _MODULE_DIR.parent / "local"
+_BUNDLED_WAKE_WORD_IDS = ("okay_nabu", "hey_mycroft", "hey_jarvis")
 
 
 @dataclass
@@ -49,9 +44,6 @@ class AudioProcessingContext:
     wake_words: list = field(default_factory=list)
     micro_features: object | None = None
     micro_inputs: list = field(default_factory=list)
-    oww_features: object | None = None
-    oww_inputs: list = field(default_factory=list)
-    has_oww: bool = False
     last_active: float | None = None
 
 
@@ -158,7 +150,6 @@ class VoiceAssistantService:
             preferences=preferences,
             preferences_path=preferences_path,
             refractory_seconds=2.0,
-            download_dir=_LOCAL_DIR,
             reachy_mini=self.reachy_mini,
             motion_enabled=True,
         )
@@ -532,11 +523,9 @@ class VoiceAssistantService:
 
     async def _verify_required_files(self) -> None:
         """Verify required model and sound files exist (bundled with package)."""
-        # Required wake word files (bundled in wakewords/ directory)
-        # Note: hey_jarvis is in openWakeWord/ with version suffix, so not required here
         required_wakewords = [
-            "okay_nabu.tflite",
-            "okay_nabu.json",
+            *(f"{wake_word_id}.tflite" for wake_word_id in _BUNDLED_WAKE_WORD_IDS),
+            *(f"{wake_word_id}.json" for wake_word_id in _BUNDLED_WAKE_WORD_IDS),
             "stop.tflite",
             "stop.json",
         ]
@@ -568,43 +557,26 @@ class VoiceAssistantService:
         """Load available wake word configurations."""
         available_wake_words: dict[str, AvailableWakeWord] = {}
 
-        # Load order: OpenWakeWord first, then MicroWakeWord, then external
-        # Later entries override earlier ones, so MicroWakeWord takes priority
-        wake_word_dirs = [
-            _WAKEWORDS_DIR / "openWakeWord",  # OpenWakeWord (lowest priority)
-            _LOCAL_DIR / "external_wake_words",  # External wake words
-            _WAKEWORDS_DIR,  # MicroWakeWord (highest priority)
-        ]
+        for model_id in _BUNDLED_WAKE_WORD_IDS:
+            config_path = _WAKEWORDS_DIR / f"{model_id}.json"
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    config = json.load(f)
 
-        for wake_word_dir in wake_word_dirs:
-            if not wake_word_dir.exists():
-                continue
-
-            for config_path in wake_word_dir.glob("*.json"):
-                model_id = config_path.stem
-                if model_id == "stop":
+                model_type = WakeWordType(config.get("type", "micro"))
+                if model_type != WakeWordType.MICRO_WAKE_WORD:
+                    _LOGGER.warning("Skipping non-MicroWakeWord model: %s", config_path)
                     continue
 
-                try:
-                    with open(config_path, encoding="utf-8") as f:
-                        config = json.load(f)
-
-                    model_type = WakeWordType(config.get("type", "micro"))
-
-                    if model_type == WakeWordType.OPEN_WAKE_WORD:
-                        wake_word_path = config_path.parent / config["model"]
-                    else:
-                        wake_word_path = config_path
-
-                    available_wake_words[model_id] = AvailableWakeWord(
-                        id=model_id,
-                        type=model_type,
-                        wake_word=config.get("wake_word", model_id),
-                        trained_languages=config.get("trained_languages", []),
-                        wake_word_path=wake_word_path,
-                    )
-                except Exception as e:
-                    _LOGGER.warning("Failed to load wake word %s: %s", config_path, e)
+                available_wake_words[model_id] = AvailableWakeWord(
+                    id=model_id,
+                    type=model_type,
+                    wake_word=config.get("wake_word", model_id),
+                    trained_languages=config.get("trained_languages", []),
+                    wake_word_path=config_path,
+                )
+            except Exception as e:
+                _LOGGER.warning("Failed to load wake word %s: %s", config_path, e)
 
         return available_wake_words
 
@@ -630,7 +602,7 @@ class VoiceAssistantService:
     ):
         """Load wake word models."""
 
-        wake_models: dict[str, MicroWakeWord | OpenWakeWord] = {}
+        wake_models = {}
         active_wake_words: set[str] = set()
 
         if preferences.active_wake_words:
@@ -653,7 +625,7 @@ class VoiceAssistantService:
 
     def _try_add_wake_model(
         self,
-        wake_models: dict[str, MicroWakeWord | OpenWakeWord],
+        wake_models: dict,
         active_wake_words: set[str],
         available_wake_words: dict[str, AvailableWakeWord],
         wake_word_id: str,
@@ -799,7 +771,6 @@ class VoiceAssistantService:
     def _update_wake_words_list(self, ctx: AudioProcessingContext) -> None:
         """Update wake words list if changed."""
         from pymicro_wakeword import MicroWakeWordFeatures
-        from pyopen_wakeword import OpenWakeWord, OpenWakeWordFeatures
 
         if (not ctx.wake_words) or (self._state.wake_words_changed and self._state.wake_words):
             self._state.wake_words_changed = False
@@ -809,14 +780,11 @@ class VoiceAssistantService:
             # This prevents false triggers when switching wake words
             ctx.micro_features = MicroWakeWordFeatures()
             ctx.micro_inputs.clear()
-            if ctx.oww_features is not None:
-                ctx.oww_features = OpenWakeWordFeatures.from_builtin()
-            ctx.oww_inputs.clear()
 
             # Also reset the refractory period to prevent immediate trigger
             ctx.last_active = time.monotonic()
 
-            # state.wake_words is Dict[str, MicroWakeWord/OpenWakeWord]
+            # state.wake_words is keyed by wake word ID.
             # We need to filter by active_wake_words (which contains the IDs/keys)
             for ww_id, ww_model in self._state.wake_words.items():
                 if ww_id in self._state.active_wake_words:
@@ -824,10 +792,6 @@ class VoiceAssistantService:
                     if not hasattr(ww_model, "id"):
                         ww_model.id = ww_id
                     ctx.wake_words.append(ww_model)
-
-            ctx.has_oww = any(isinstance(ww, OpenWakeWord) for ww in ctx.wake_words)
-            if ctx.has_oww and ctx.oww_features is None:
-                ctx.oww_features = OpenWakeWordFeatures.from_builtin()
 
             _LOGGER.info("Active wake words updated: %s (features reset)", list(self._state.active_wake_words))
 
@@ -972,10 +936,6 @@ class VoiceAssistantService:
         ctx.micro_inputs.clear()
         ctx.micro_inputs.extend(ctx.micro_features.process_streaming(audio_chunk))
 
-        if ctx.has_oww and ctx.oww_features is not None:
-            ctx.oww_inputs.clear()
-            ctx.oww_inputs.extend(ctx.oww_features.process_streaming(audio_chunk))
-
     def _detect_wake_words(self, ctx: AudioProcessingContext) -> None:
         """Detect wake words in the processed audio features.
 
@@ -983,7 +943,6 @@ class VoiceAssistantService:
         Following reference project pattern.
         """
         from pymicro_wakeword import MicroWakeWord
-        from pyopen_wakeword import OpenWakeWord
 
         for wake_word in ctx.wake_words:
             activated = False
@@ -992,11 +951,6 @@ class VoiceAssistantService:
                 for micro_input in ctx.micro_inputs:
                     if wake_word.process_streaming(micro_input):
                         activated = True
-            elif isinstance(wake_word, OpenWakeWord):
-                for oww_input in ctx.oww_inputs:
-                    for prob in wake_word.process_streaming(oww_input):
-                        if prob > 0.5:
-                            activated = True
 
             if activated:
                 # Check refractory period to prevent duplicate triggers

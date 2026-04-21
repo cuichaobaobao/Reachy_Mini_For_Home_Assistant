@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini_home_assistant_custom"
-version = "1.0.13"
+version = "1.0.14"
 description = "Deep integration of Reachy Mini robot with Home Assistant"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,7 +20,6 @@ dependencies = [
     # Wake word detection (local)
     # STT/TTS is handled by Home Assistant, not locally
     "pymicro-wakeword>=2.0.0,<3.0.0",
-    "pyopen-wakeword>=1.0.0,<2.0.0",
 
     # ESPHome protocol (communication with Home Assistant)
     "aioesphomeapi>=43.10.1",

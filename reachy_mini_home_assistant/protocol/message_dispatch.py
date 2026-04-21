@@ -120,17 +120,6 @@ def handle_message(protocol: "VoiceSatelliteProtocol", msg: message.Message) -> 
             )
             for ww in protocol.state.available_wake_words.values()
         ]
-        for eww in msg.external_wake_words:
-            if eww.model_type != "micro":
-                continue
-            available_wake_words.append(
-                VoiceAssistantWakeWord(
-                    id=eww.id,
-                    wake_word=eww.wake_word,
-                    trained_languages=eww.trained_languages,
-                )
-            )
-            protocol._external_wake_words[eww.id] = eww
         load_optional_mappings(protocol)
         _LOGGER.info("Connected to Home Assistant")
         schedule_ha_connected_callback(protocol)
@@ -150,14 +139,8 @@ def handle_message(protocol: "VoiceSatelliteProtocol", msg: message.Message) -> 
                 continue
             model_info = protocol.state.available_wake_words.get(wake_word_id)
             if not model_info:
-                external_wake_word = protocol._external_wake_words.get(wake_word_id)
-                if not external_wake_word:
-                    _LOGGER.warning("Wake word not found: %s", wake_word_id)
-                    continue
-                model_info = protocol._download_external_wake_word(external_wake_word)
-                if not model_info:
-                    continue
-                protocol.state.available_wake_words[wake_word_id] = model_info
+                _LOGGER.warning("Wake word not found: %s", wake_word_id)
+                continue
             _LOGGER.debug("Loading wake word: %s", model_info.wake_word_path)
             loaded_model = model_info.load()
             loaded_model.id = wake_word_id

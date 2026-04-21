@@ -10,14 +10,12 @@ from collections.abc import Iterable
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     HomeAssistantStateResponse,
     VoiceAssistantAudio,
-    VoiceAssistantExternalWakeWord,
 )
 from google.protobuf import message
 from pymicro_wakeword import MicroWakeWord
-from pyopen_wakeword import OpenWakeWord
 
 from ..entities.event_emotion_mapper import BuiltinBehaviorController, EventEmotionMapper
-from ..models import AvailableWakeWord, ServerState
+from ..models import ServerState
 from ..reachy_controller import ReachyController
 from .api_server import APIServer
 from .entity_bridge import (
@@ -59,7 +57,6 @@ from .voice_pipeline import (
     stop as stop_pipeline,
     unduck,
 )
-from .wakeword_assets import download_external_wake_word
 
 _LOGGER = logging.getLogger(__name__)
 IDLE_RETURN_DELAY_S = 10.0
@@ -93,7 +90,6 @@ class VoiceSatelliteProtocol(APIServer):
         self._timer_finished = False
         self._timer_ring_start: float | None = None
         self._pending_voice_request: tuple[str | None, str | None] | None = None
-        self._external_wake_words: dict[str, VoiceAssistantExternalWakeWord] = {}
         self._optional_mappings_loaded = False
 
         # Conversation tracking for continuous conversation
@@ -200,7 +196,7 @@ class VoiceSatelliteProtocol(APIServer):
     def _clear_conversation(self) -> None:
         clear_conversation(self)
 
-    def wakeup(self, wake_word: MicroWakeWord | OpenWakeWord) -> None:
+    def wakeup(self, wake_word: MicroWakeWord) -> None:
         """Handle wake word detection - start voice pipeline."""
         if self._timer_finished:
             self._timer_finished = False
@@ -296,11 +292,6 @@ class VoiceSatelliteProtocol(APIServer):
         self._set_stop_word_active(False)
 
         run_ha_disconnected_callback(self)
-
-    def _download_external_wake_word(
-        self, external_wake_word: VoiceAssistantExternalWakeWord
-    ) -> AvailableWakeWord | None:
-        return download_external_wake_word(self, external_wake_word)
 
     # -------------------------------------------------------------------------
     # Reachy Mini Motion Control

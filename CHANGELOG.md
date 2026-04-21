@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.14] - 2026-04-21
+
+### Changed
+- Limit bundled selectable wake words to the Linux Voice Assistant MicroWakeWord set: Okay Nabu, Hey Mycroft, and Hey Jarvis.
+- Replace Hey Jarvis with the Linux Voice Assistant MicroWakeWord model and keep Okay Nabu, Hey Mycroft, and Stop aligned with the same source set.
+
+### Removed
+- Remove OpenWakeWord runtime support, the pyopen-wakeword dependency, and bundled openWakeWord model assets.
+- Remove unused bundled wake words and external wake-word download support so Home Assistant only exposes the three curated wake words.
+
 ## [1.0.13] - 2026-04-21
 
 ### Fixed

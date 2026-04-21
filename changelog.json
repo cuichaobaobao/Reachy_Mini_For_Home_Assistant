@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.14",
+    "date": "2026-04-21",
+    "changes": [
+      "Build: Bump package version to 1.0.14",
+      "Change: Limit selectable wake words to the Linux Voice Assistant MicroWakeWord set: Okay Nabu, Hey Mycroft, and Hey Jarvis",
+      "Change: Replace Hey Jarvis with the Linux Voice Assistant MicroWakeWord model and keep Okay Nabu, Hey Mycroft, and Stop aligned with the same source set",
+      "Remove: Delete OpenWakeWord runtime support, the pyopen-wakeword dependency, and bundled openWakeWord model assets",
+      "Remove: Delete unused bundled wake words and external wake-word download support so Home Assistant only exposes the three curated wake words"
+    ]
+  },
+  {
     "version": "1.0.13",
     "date": "2026-04-21",
     "changes": [

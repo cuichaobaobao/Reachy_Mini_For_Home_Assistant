@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from queue import Queue
 
     from pymicro_wakeword import MicroWakeWord
-    from pyopen_wakeword import OpenWakeWord
 
     from .audio.audio_player import AudioPlayer
     from .entities.entity import ESPHomeEntity, MediaPlayerEntity
@@ -23,7 +22,6 @@ _LOGGER = logging.getLogger(__name__)
 
 class WakeWordType(str, Enum):
     MICRO_WAKE_WORD = "micro"
-    OPEN_WAKE_WORD = "openWakeWord"
 
 
 @dataclass
@@ -34,18 +32,11 @@ class AvailableWakeWord:
     trained_languages: list[str]
     wake_word_path: Path
 
-    def load(self) -> "MicroWakeWord | OpenWakeWord":
+    def load(self) -> "MicroWakeWord":
         if self.type == WakeWordType.MICRO_WAKE_WORD:
             from pymicro_wakeword import MicroWakeWord
 
             return MicroWakeWord.from_config(config_path=self.wake_word_path)
-
-        if self.type == WakeWordType.OPEN_WAKE_WORD:
-            from pyopen_wakeword import OpenWakeWord
-
-            oww_model = OpenWakeWord.from_model(model_path=self.wake_word_path)
-            oww_model.wake_word = self.wake_word
-            return oww_model
 
         raise ValueError(f"Unexpected wake word type: {self.type}")
 
@@ -74,7 +65,7 @@ class ServerState:
     audio_queue: "Queue[bytes | None]"
     entities: "list[ESPHomeEntity]"
     available_wake_words: "dict[str, AvailableWakeWord]"
-    wake_words: "dict[str, MicroWakeWord | OpenWakeWord]"
+    wake_words: "dict[str, MicroWakeWord]"
     active_wake_words: set[str]
     stop_word: "MicroWakeWord"
     music_player: "AudioPlayer"
@@ -83,7 +74,6 @@ class ServerState:
     timer_finished_sound: str
     preferences: Preferences
     preferences_path: Path
-    download_dir: Path
 
     # Reachy Mini specific
     reachy_mini: object
