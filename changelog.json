@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.13",
+    "date": "2026-04-21",
+    "changes": [
+      "Build: Bump package version to 1.0.13",
+      "Fix: Restore the pre-1.0.12 microphone/TTS media access behavior after the serialized microphone-read change caused worse TTS stutter on the robot"
+    ]
+  },
+  {
     "version": "1.0.12",
     "date": "2026-04-21",
     "changes": [

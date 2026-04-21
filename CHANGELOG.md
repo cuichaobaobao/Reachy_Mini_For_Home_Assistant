@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.13] - 2026-04-21
+
+### Fixed
+- Restore the pre-1.0.12 microphone/TTS media access behavior after the serialized microphone-read change caused worse TTS stutter on the robot.
+
 ## [1.0.12] - 2026-04-21
 
 ### Fixed

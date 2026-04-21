@@ -288,14 +288,7 @@ class VoiceAssistantService:
         deadline = time.monotonic() + timeout_s
         while time.monotonic() < deadline:
             try:
-                acquired = self._gstreamer_lock.acquire(timeout=0.05)
-                if not acquired:
-                    time.sleep(0.02)
-                    continue
-                try:
-                    sample = media.get_audio_sample()
-                finally:
-                    self._gstreamer_lock.release()
+                sample = media.get_audio_sample()
                 if sample is not None and isinstance(sample, np.ndarray) and sample.size > 0:
                     return True
             except Exception:
@@ -851,18 +844,8 @@ class VoiceAssistantService:
         if self._robot_services_paused.is_set():
             return None
 
-        # Get new audio data from SDK. Use the same lock as TTS playback so
-        # get_audio_sample() never races push_audio_sample() on the SDK media
-        # pipeline, especially while an external WebRTC/RTSP bridge is active.
-        is_tts_playing = bool(self._state and self._state.tts_player and self._state.tts_player.is_playing)
-        lock_timeout = 0.005 if is_tts_playing else 0.05
-        acquired = self._gstreamer_lock.acquire(timeout=lock_timeout)
-        if not acquired:
-            return None
-        try:
-            audio_data = self.reachy_mini.media.get_audio_sample()
-        finally:
-            self._gstreamer_lock.release()
+        # Get new audio data from SDK
+        audio_data = self.reachy_mini.media.get_audio_sample()
 
         # Debug: Log SDK audio data statistics and sample rate (once at startup)
         if audio_data is not None and isinstance(audio_data, np.ndarray) and audio_data.size > 0:
