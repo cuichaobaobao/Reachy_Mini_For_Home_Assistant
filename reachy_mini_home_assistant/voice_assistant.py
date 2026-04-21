@@ -29,7 +29,6 @@ from .models import AvailableWakeWord, Preferences, ServerState, WakeWordType
 from .motion.reachy_motion import ReachyMiniMotion
 from .protocol.satellite import VoiceSatelliteProtocol
 from .protocol.zeroconf import HomeAssistantZeroconf, get_default_friendly_name
-from .vision.camera_server import MJPEGCameraServer
 
 if TYPE_CHECKING:
     from pymicro_wakeword import MicroWakeWord
@@ -74,16 +73,12 @@ class VoiceAssistantService:
         host: str = "0.0.0.0",
         port: int = 6053,
         wake_model: str = "okay_nabu",
-        camera_port: int = 8081,
-        camera_enabled: bool = True,
     ):
         self.reachy_mini = reachy_mini
         self.name = name or get_default_friendly_name()
         self.host = host
         self.port = port
         self.wake_model = wake_model
-        self.camera_port = camera_port
-        self.camera_enabled = camera_enabled
 
         self._server = None
         self._discovery = None
@@ -91,7 +86,6 @@ class VoiceAssistantService:
         self._running = False
         self._state: ServerState | None = None
         self._motion = ReachyMiniMotion(reachy_mini)
-        self._camera_server: MJPEGCameraServer | None = None
 
         # Audio buffer for fixed-size chunk output
         # Use deque with maxlen to avoid creating new arrays on every operation
@@ -108,7 +102,7 @@ class VoiceAssistantService:
         self._robot_services_resumed.set()  # Start in resumed state
 
         # GStreamer access lock - prevents concurrent access to media pipeline
-        # This prevents crashes when multiple threads access get_audio_sample(), push_audio_sample(), get_frame()
+        # This prevents crashes when multiple threads access get_audio_sample() and push_audio_sample().
         self._gstreamer_lock = threading.Lock()
 
         self._event_loop: asyncio.AbstractEventLoop | None = None
@@ -226,15 +220,12 @@ class VoiceAssistantService:
         )
         self._audio_thread.start()
 
-        # Create ESPHome server (pass camera_server for camera entity)
+        # Create ESPHome server
         loop = asyncio.get_running_loop()
-        camera_server = self._camera_server  # Capture for lambda
 
         def protocol_factory():
             try:
-                protocol = VoiceSatelliteProtocol(
-                    self._state, camera_server=camera_server, voice_assistant_service=self
-                )
+                protocol = VoiceSatelliteProtocol(self._state, voice_assistant_service=self)
                 protocol.set_ha_connection_callbacks(
                     on_connected=self._on_ha_connected, on_disconnected=self._on_ha_disconnected
                 )
@@ -316,7 +307,7 @@ class VoiceAssistantService:
         self._set_audio_players_suspended(True)
         self._stop_media_system()
 
-        _LOGGER.info("Voice services suspended - camera and motion remain active")
+        _LOGGER.info("Voice services suspended - motion remains active")
 
     def _resume_voice_services(self, reason: str) -> None:
         """Resume only voice-related services."""
@@ -328,7 +319,7 @@ class VoiceAssistantService:
         self._set_audio_players_suspended(False)
         self._robot_services_resumed.set()
 
-        _LOGGER.info("Voice services resumed - camera and motion remained active")
+        _LOGGER.info("Voice services resumed - motion remained active")
 
     def _suspend_non_esphome_services(self, reason: str) -> None:
         """Suspend all non-ESPHome services."""
@@ -337,13 +328,6 @@ class VoiceAssistantService:
         self._robot_services_resumed.clear()
         self._set_service_state(suspended=True)
         self._audio_buffer.clear()
-
-        if self._camera_server is not None and self._state.camera_enabled:
-            try:
-                self._camera_server.suspend()
-                _LOGGER.debug("Camera server suspended")
-            except Exception as e:
-                _LOGGER.warning("Error suspending camera: %s", e)
 
         if self._motion is not None and self._motion._movement_manager is not None:
             try:
@@ -364,13 +348,6 @@ class VoiceAssistantService:
         self._robot_services_paused.clear()
         self._set_service_state(suspended=False)
         self._start_media_system()
-
-        if self._camera_server is not None and self._state.camera_enabled:
-            try:
-                self._camera_server.resume_from_suspend()
-                _LOGGER.debug("Camera server resumed from suspend")
-            except Exception as e:
-                _LOGGER.warning("Error resuming camera: %s", e)
 
         if self._motion is not None and self._motion._movement_manager is not None:
             try:
@@ -465,36 +442,9 @@ class VoiceAssistantService:
 
     async def _on_ha_connected(self) -> None:
         """Called when Home Assistant connects."""
-        _LOGGER.info("Home Assistant connected - initializing camera and voice services")
+        _LOGGER.info("Home Assistant connected - initializing voice services")
         self._ha_connected = True
         self._ha_connection_established = True
-
-        # Start camera server if enabled and not already started
-        if self.camera_enabled and self._state.camera_enabled and self._camera_server is None:
-            try:
-                self._camera_server = MJPEGCameraServer(
-                    reachy_mini=self.reachy_mini,
-                    host=self.host,
-                    port=self.camera_port,
-                    fps=Config.camera.fps_high,
-                    quality=Config.camera.quality,
-                    idle_fps=Config.camera.fps_idle,
-                    gstreamer_lock=self._gstreamer_lock,
-                )
-
-                await self._camera_server.start()
-
-                self._state._camera_server = self._camera_server
-
-                if self._state.satellite:
-                    self._state.satellite.update_camera_server(self._camera_server)
-
-                if self._motion is not None:
-                    self._motion.set_camera_server(self._camera_server)
-
-                _LOGGER.info("Camera server started on %s:%s", self.host, self.camera_port)
-            except Exception as e:
-                _LOGGER.error("Failed to start camera server: %s", e)
 
         # Resume services if they were suspended due to HA disconnection
         if self._state.services_suspended:
@@ -502,7 +452,7 @@ class VoiceAssistantService:
 
     def _on_ha_disconnected(self) -> None:
         """Called when Home Assistant disconnects."""
-        _LOGGER.warning("Home Assistant disconnected - suspending camera and voice services")
+        _LOGGER.warning("Home Assistant disconnected - suspending voice services")
         self._ha_connected = False
 
         self._suspend_non_esphome_services(reason="ha_disconnected")
@@ -567,12 +517,7 @@ class VoiceAssistantService:
             except TimeoutError:
                 _LOGGER.warning("Sendspin stop did not finish in time")
 
-        # 7. Stop camera server
-        # Only stop if camera is NOT disabled (user has not manually disabled it)
-        if self._camera_server and self._state.camera_enabled:
-            await self._camera_server.stop(join_timeout=Config.shutdown.camera_stop_timeout)
-            self._camera_server = None
-        # Close SDK media resources to prevent memory leaks (even if camera is disabled)
+        # 7. Close SDK media resources to prevent memory leaks
         try:
             self.reachy_mini.media.close()
             _LOGGER.info("SDK media resources closed")

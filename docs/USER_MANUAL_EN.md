@@ -22,7 +22,6 @@ The app automatically:
 - Starts the ESPHome satellite service on port 6053
 - Loads local wake word models
 - Registers with mDNS for Home Assistant discovery
-- Serves the MJPEG camera stream on port 8081
 - Connects to a Sendspin server if one is available on the network
 
 ### Step 3: Connect to Home Assistant
@@ -63,12 +62,6 @@ Home Assistant discovers Reachy Mini through mDNS.
 - Turns the robot toward the sound source on wake
 - Can be enabled or disabled from Home Assistant
 
-### Camera Stream
-- MJPEG stream: `http://<robot-ip>:8081/stream`
-- Snapshot endpoint: `http://<robot-ip>:8081/snapshot`
-- Home Assistant Camera entity remains available
-- External systems such as Frigate/go2rtc can pull the stream for testing
-
 ### Emotion Responses
 The robot can play 35 emotion moves, including happy, sad, angry, surprised, laughing, loving, curious, thoughtful, and tired.
 
@@ -96,7 +89,6 @@ The robot can play 35 emotion moves, including happy, sad, angry, surprised, lau
 | Backend Ready | Binary Sensor | Backend connection status |
 | Mute | Switch | Suspend/resume voice pipeline |
 | Speaker Volume | Number 0-100% | Speaker volume control |
-| Disable Camera | Switch | Suspend/resume camera service |
 | Idle Behavior | Switch | Unified idle motion, antenna motion, and micro-actions |
 | Sendspin | Switch | Enable/disable Sendspin discovery and playback |
 
@@ -148,11 +140,6 @@ The robot can play 35 emotion moves, including happy, sad, angry, surprised, lau
 |--------|------|-------------|
 | Emotion | Select | Choose one of 35 emotion moves |
 
-### Phase 10: Camera
-| Entity | Type | Description |
-|--------|------|-------------|
-| Camera | Camera | Live MJPEG stream |
-
 ### Phase 21: Conversation
 | Entity | Type | Description |
 |--------|------|-------------|
@@ -180,7 +167,6 @@ The robot can play 35 emotion moves, including happy, sad, angry, surprised, lau
 | Not responding to wake word | Check Mute is off, reduce background noise, and verify Home Assistant is connected |
 | No audio output | Check Speaker Volume and verify the TTS engine in Home Assistant |
 | Cannot connect to Home Assistant | Verify same network and port 6053 |
-| Camera unavailable | Ensure Disable Camera is off and check `http://<robot-ip>:8081/stream` |
 | Motion unavailable | Ensure motors are enabled and check robot daemon status |
 
 ---
@@ -191,11 +177,8 @@ The robot can play 35 emotion moves, including happy, sad, angry, surprised, lau
 Wake Word:     "Okay Nabu"
 Stop Word:     "Stop"
 ESPHome Port:  6053
-Camera Port:   8081 MJPEG
-Stream:        http://<robot-ip>:8081/stream
-Snapshot:      http://<robot-ip>:8081/snapshot
 ```
 
 ---
 
-*Reachy Mini Voice Assistant v1.0.10*
+*Reachy Mini Voice Assistant v1.0.11*

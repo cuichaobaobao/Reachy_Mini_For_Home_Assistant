@@ -6,7 +6,7 @@ for the Reachy Mini voice assistant.
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from ..models import Preferences
 from .entity import BinarySensorEntity
@@ -14,7 +14,6 @@ from .entity_extensions import SwitchEntity
 from .entity_keys import get_entity_key
 from .runtime_entity_setup import (
     setup_behavior_entities,
-    setup_camera_entities,
     setup_runtime_entities,
     setup_service_entities,
 )
@@ -29,7 +28,6 @@ from .sensor_entity_setup import (
 
 if TYPE_CHECKING:
     from ..reachy_controller import ReachyController
-    from ..vision.camera_server import MJPEGCameraServer
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,7 +39,6 @@ class EntityRegistry:
         self,
         server,
         reachy_controller: "ReachyController",
-        camera_server: Optional["MJPEGCameraServer"] = None,
         play_emotion_callback: Callable[[str], None] | None = None,
     ):
         """Initialize the entity registry.
@@ -49,12 +46,10 @@ class EntityRegistry:
         Args:
             server: The VoiceSatelliteProtocol server instance
             reachy_controller: The ReachyController instance
-            camera_server: Optional camera server for camera entity
             play_emotion_callback: Optional callback for playing emotions
         """
         self.server = server
         self.reachy_controller = reachy_controller
-        self.camera_server = camera_server
         self._play_emotion_callback = play_emotion_callback
 
         # Runtime state entities
@@ -233,14 +228,13 @@ class EntityRegistry:
         self._setup_phase7_entities(entities)
         self._setup_phase8_entities(entities)
         self._setup_phase9_entities(entities)
-        self._setup_phase10_entities(entities)
         # Phase 11 (LED control) disabled - LEDs are inside the robot and not visible
         self._setup_phase12_entities(entities)
         # Phase 13 (Sendspin) - auto-enabled via mDNS discovery, no user entities
         # Phase 14 (head_joints, passive_joints) removed - not needed
         # Phase 20 (Tap detection) disabled - too many false triggers
         self._setup_phase21_entities(entities)
-        # Phase 22/23 vision AI entities removed; video stream remains in Phase 10.
+        # Removed runtime phases are intentionally skipped.
         self._setup_phase24_entities(entities)  # System diagnostics
 
         _LOGGER.info("All entities registered: %d total", len(entities))
@@ -272,9 +266,6 @@ class EntityRegistry:
     def _setup_phase9_entities(self, entities: list) -> None:
         """Setup Phase 9 entities: Audio controls."""
         _LOGGER.debug("Phase 9 entities registered: none")
-
-    def _setup_phase10_entities(self, entities: list) -> None:
-        setup_camera_entities(self, entities)
 
     def _setup_phase12_entities(self, entities: list) -> None:
         """Setup Phase 12 entities: Audio processing parameters."""

@@ -8,31 +8,16 @@ Usage:
     from core.config import Config
 
     # Access configuration
-    port = Config.ESPHOME_PORT
-    fps = Config.CAMERA_FPS
-
-    # Or use grouped access
-    camera_cfg = Config.camera
-    fps = camera_cfg.fps
+    port = Config.esphome.port
 """
 
 import json
 import logging
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
-
-
-def _env_bool(key: str, default: bool) -> bool:
-    """Get boolean from environment variable."""
-    val = os.environ.get(key, "").lower()
-    if val in ("true", "1", "yes", "on"):
-        return True
-    if val in ("false", "0", "no", "off"):
-        return False
-    return default
 
 
 def _env_float(key: str, default: float) -> float:
@@ -73,21 +58,6 @@ class ESPHomeConfig:
     port: int = 6053
     device_name: str = "reachy-mini"
     friendly_name: str = "Reachy Mini"
-
-
-@dataclass
-class CameraConfig:
-    """Configuration for camera and video streaming."""
-
-    # HTTP server
-    port: int = 8081
-
-    # Frame capture
-    fps_high: int = 15  # Active stream mode
-    fps_idle: float = 1.0  # Low-rate snapshot refresh when no stream client is connected
-
-    # JPEG encoding
-    quality: int = 75
 
 
 @dataclass
@@ -165,7 +135,6 @@ class ShutdownConfig:
     """Configuration for shutdown behavior."""
 
     audio_thread_join_timeout: float = 1.0  # seconds
-    camera_stop_timeout: float = 3.0  # seconds
     server_close_timeout: float = 3.0  # seconds
     sendspin_stop_timeout: float = 3.0  # seconds
 
@@ -197,7 +166,6 @@ class Config:
     # Subsystem configurations
     daemon: DaemonConfig = DaemonConfig()
     esphome: ESPHomeConfig = ESPHomeConfig()
-    camera: CameraConfig = CameraConfig()
     motion: MotionConfig = MotionConfig()
     audio: AudioConfig = AudioConfig()
     doa: DOAConfig = DOAConfig()
@@ -234,7 +202,7 @@ class Config:
         """Load configuration overrides from environment variables.
 
         Environment variables follow the pattern: REACHY_<SECTION>_<KEY>
-        Example: REACHY_CAMERA_FPS=30
+        Example: REACHY_ESPHOME_PORT=6053
         """
         # Daemon
         cls.daemon.url = os.environ.get("REACHY_DAEMON_URL", cls.daemon.url)
@@ -260,9 +228,6 @@ class Config:
         # ESPHome
         cls.esphome.port = _env_int("REACHY_ESPHOME_PORT", cls.esphome.port)
         cls.esphome.device_name = os.environ.get("REACHY_ESPHOME_DEVICE_NAME", cls.esphome.device_name)
-
-        # Camera
-        cls.camera.port = _env_int("REACHY_CAMERA_PORT", cls.camera.port)
 
         # Motion
         cls.motion.control_rate_hz = _env_float("REACHY_MOTION_CONTROL_RATE", cls.motion.control_rate_hz)
@@ -309,11 +274,6 @@ class Config:
             for key, value in data["esphome"].items():
                 if hasattr(cls.esphome, key):
                     setattr(cls.esphome, key, value)
-
-        if "camera" in data:
-            for key, value in data["camera"].items():
-                if hasattr(cls.camera, key):
-                    setattr(cls.camera, key, value)
 
         if "motion" in data:
             for key, value in data["motion"].items():
@@ -377,9 +337,6 @@ class Config:
                 "port": cls.esphome.port,
                 "device_name": cls.esphome.device_name,
                 "friendly_name": cls.esphome.friendly_name,
-            },
-            "camera": {
-                "port": cls.camera.port,
             },
             "motion": {
                 "control_rate_hz": cls.motion.control_rate_hz,

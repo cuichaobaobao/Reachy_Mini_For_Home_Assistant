@@ -102,9 +102,6 @@ class ServerState:
     # Mute state (controlled from Home Assistant) - thread-safe via properties
     _is_muted: bool = False
 
-    # Camera state (controlled from Home Assistant) - thread-safe via properties
-    _camera_enabled: bool = True
-
     # Thread safety
     _state_lock: "threading.Lock | None" = None
 
@@ -147,23 +144,6 @@ class ServerState:
         else:
             with self._state_lock:
                 object.__setattr__(self, "_is_muted", value)
-
-    @property
-    def camera_enabled(self) -> bool:
-        """Thread-safe getter for camera_enabled."""
-        if self._state_lock is None:
-            return self._camera_enabled
-        with self._state_lock:
-            return self._camera_enabled
-
-    @camera_enabled.setter
-    def camera_enabled(self, value: bool) -> None:
-        """Thread-safe setter for camera_enabled."""
-        if self._state_lock is None:
-            object.__setattr__(self, "_camera_enabled", value)
-        else:
-            with self._state_lock:
-                object.__setattr__(self, "_camera_enabled", value)
 
     def save_preferences(self) -> None:
         """Save preferences as JSON."""

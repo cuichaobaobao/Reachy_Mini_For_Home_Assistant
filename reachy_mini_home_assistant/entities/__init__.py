@@ -13,7 +13,6 @@ This module handles ESPHome entity definitions:
 # from .emotion_detector import EmotionKeywordDetector
 from .entity import (
     BinarySensorEntity,
-    CameraEntity,
     ESPHomeEntity,
     MediaPlayerEntity,
     NumberEntity,
@@ -49,7 +48,6 @@ __all__ = [
     "ENTITY_KEYS",
     "BinarySensorEntity",
     "ButtonEntity",
-    "CameraEntity",
     # Entity base classes
     "ESPHomeEntity",
     # Emotion detection (DISABLED - moved to HA blueprint)

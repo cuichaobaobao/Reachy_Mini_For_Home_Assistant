@@ -9,10 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.11] - 2026-04-21
+
+### Removed
+- Remove robot-side MJPEG camera streaming, snapshot serving, and Home Assistant camera entities from the mini app.
+- Remove camera runtime modules, camera command-line/configuration options, camera lifecycle wiring, and OpenCV runtime dependency.
+
 ## [1.0.10] - 2026-04-19
 
 ### Changed
-- Refresh the Hugging Face landing page and user manuals to match the current voice, motion, and camera-stream focused app.
+- Refresh the Hugging Face landing page and user manuals to match the current voice and motion focused app.
 - Replace the old project summary with a concise current architecture note for the custom app.
 
 ### Removed

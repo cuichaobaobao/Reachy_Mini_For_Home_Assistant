@@ -23,14 +23,8 @@ def create_entity_registry(protocol: "VoiceSatelliteProtocol") -> EntityRegistry
     return EntityRegistry(
         server=protocol,
         reachy_controller=protocol.reachy_controller,
-        camera_server=protocol.camera_server,
         play_emotion_callback=protocol._play_emotion,
     )
-
-
-def bind_camera_callbacks(protocol: "VoiceSatelliteProtocol", camera_server) -> None:
-    # The camera server is a pure video stream; no analysis callbacks are registered.
-    return
 
 
 def initialize_entities(protocol: "VoiceSatelliteProtocol") -> None:
@@ -63,12 +57,6 @@ def initialize_entities(protocol: "VoiceSatelliteProtocol") -> None:
     except Exception as e:
         _LOGGER.error("Error during entity setup: %s", e, exc_info=True)
         raise
-
-
-def update_camera_server(protocol: "VoiceSatelliteProtocol", camera_server) -> None:
-    protocol._entity_registry.camera_server = camera_server
-    bind_camera_callbacks(protocol, camera_server)
-    _LOGGER.debug("Camera server reference updated in entity registry")
 
 
 def load_optional_mappings(protocol: "VoiceSatelliteProtocol") -> None:

@@ -9,7 +9,6 @@ Key features:
 - ESPHome protocol for seamless Home Assistant communication
 - STT/TTS powered by Home Assistant voice pipeline
 - Reachy Mini motion control with expressive animations
-- Camera streaming
 - Smart home entity control through natural voice commands
 """
 

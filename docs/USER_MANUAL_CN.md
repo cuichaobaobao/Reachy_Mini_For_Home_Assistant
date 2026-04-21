@@ -22,7 +22,6 @@
 - 在端口 6053 启动 ESPHome 卫星服务
 - 加载本地唤醒词模型
 - 通过 mDNS 注册以便 Home Assistant 自动发现
-- 在端口 8081 提供 MJPEG 摄像头流
 - 如果网络上有 Sendspin 服务器则自动连接
 
 ### 第三步：连接 Home Assistant
@@ -63,12 +62,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 - 唤醒时机器人可转向声源
 - 可通过 Home Assistant 开关启用/禁用
 
-### 摄像头视频流
-- 提供 MJPEG 视频流：`http://<robot-ip>:8081/stream`
-- 提供单帧截图：`http://<robot-ip>:8081/snapshot`
-- Home Assistant 中保留 Camera 实体
-- 可供外部系统（例如 Frigate/go2rtc）拉流测试
-
 ### 情绪响应
 机器人可播放 35 种不同情绪，包括开心、难过、愤怒、惊讶、大笑、爱慕、好奇、沉思、疲倦等。
 
@@ -96,7 +89,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 | Backend Ready | 二进制传感器 | 后端连接状态 |
 | Mute | 开关 | 暂停/恢复语音链路 |
 | Speaker Volume | 数值 (0-100%) | 扬声器音量控制 |
-| Disable Camera | 开关 | 暂停/恢复摄像头服务 |
 | Idle Behavior | 开关 | 统一空闲行为：头部、天线、微动作 |
 | Sendspin | 开关 | 启用/禁用 Sendspin 发现与播放 |
 
@@ -148,11 +140,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 |------|------|------|
 | Emotion | 选择器 | 选择要播放的情绪（35 个选项） |
 
-### 阶段 10：摄像头
-| 实体 | 类型 | 说明 |
-|------|------|------|
-| Camera | 摄像头 | 实时 MJPEG 流 |
-
 ### 阶段 21：对话
 | 实体 | 类型 | 说明 |
 |------|------|------|
@@ -180,7 +167,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 | 不响应唤醒词 | 检查 Mute 是否关闭，减少背景噪音，并确认已连接 Home Assistant |
 | 没有音频输出 | 检查 Speaker Volume，验证 HA 中的 TTS 引擎 |
 | 无法连接 HA | 确认在同一网络，检查端口 6053 |
-| 摄像头不可用 | 确认 Disable Camera 已关闭，并检查 `http://<robot-ip>:8081/stream` |
 | 动作没有响应 | 确认电机已启用，检查机器人 daemon 状态 |
 
 ---
@@ -191,11 +177,8 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 唤醒词：       "Okay Nabu"
 停止词：       "Stop"
 ESPHome 端口： 6053
-摄像头端口：   8081 (MJPEG)
-视频流：       http://<robot-ip>:8081/stream
-截图：         http://<robot-ip>:8081/snapshot
 ```
 
 ---
 
-*Reachy Mini 语音助手 v1.0.10*
+*Reachy Mini 语音助手 v1.0.11*

@@ -1,11 +1,22 @@
 [
   {
+    "version": "1.0.11",
+    "date": "2026-04-21",
+    "changes": [
+      "Build: Bump package version to 1.0.11",
+      "Remove: Delete robot-side MJPEG camera streaming, snapshot serving, and Home Assistant camera entities",
+      "Remove: Delete camera runtime modules, camera command-line/configuration options, camera lifecycle wiring, and the OpenCV runtime dependency",
+      "Change: Keep voice, TTS/STT, motion, DOA, manual direction hold, diagnostics, and Sendspin behavior unchanged"
+    ]
+  },
+  {
     "version": "1.0.10",
     "date": "2026-04-19",
     "changes": [
       "Build: Bump package version to 1.0.10",
-      "Change: Refresh Hugging Face landing page and user manuals to match the current voice, motion, and camera-stream focused app",
+      "Change: Refresh Hugging Face landing page and user manuals to match the current voice and motion focused app",
       "Change: Replace the old project summary with a concise current architecture note for the custom app",
+      "Remove: Delete robot-side MJPEG camera streaming, snapshot serving, Home Assistant camera entities, and the OpenCV runtime dependency",
       "Remove: Delete stale public-facing references to removed robot-side vision AI features from current docs and landing content",
       "Remove: Delete obsolete comments and unused preference-number helpers left after the 1.0.9 cleanup"
     ]

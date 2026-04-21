@@ -40,17 +40,6 @@ async def main() -> None:
         help="Id of active wake model (default: okay_nabu)",
     )
     parser.add_argument(
-        "--camera-port",
-        type=int,
-        default=8081,
-        help="Port for camera server (default: 8081)",
-    )
-    parser.add_argument(
-        "--no-camera",
-        action="store_true",
-        help="Disable camera server",
-    )
-    parser.add_argument(
         "--debug",
         action="store_true",
         help="Print DEBUG messages to console",
@@ -79,8 +68,6 @@ async def main() -> None:
             host=args.host,
             port=args.port,
             wake_model=args.wake_model,
-            camera_port=args.camera_port,
-            camera_enabled=not args.no_camera,
         )
 
         # Create stop event for graceful shutdown
@@ -109,7 +96,6 @@ async def main() -> None:
             _LOGGER.info("=" * 50)
             _LOGGER.info("Name: %s", args.name)
             _LOGGER.info("ESPHome Server: %s:%s", args.host, args.port)
-            _LOGGER.info("Camera Server: %s:%s", args.host, args.camera_port)
             _LOGGER.info("Motion control: enabled")
             _LOGGER.info("=" * 50)
             _LOGGER.info("Add this device in Home Assistant:")

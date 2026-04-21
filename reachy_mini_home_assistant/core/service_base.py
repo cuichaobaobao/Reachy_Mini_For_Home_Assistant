@@ -220,26 +220,22 @@ class SleepAwareService(ABC):
     is called to release resources. When it wakes, resume() restores them.
 
     Example:
-        class CameraService(SleepAwareService):
+        class BackgroundService(SleepAwareService):
             @property
             def service_name(self) -> str:
-                return "camera"
+                return "background"
 
             async def _do_start(self) -> None:
-                self._init_camera()
-                self._start_streaming()
+                self._start_worker()
 
             async def _do_suspend(self) -> None:
-                self._stop_streaming()
-                self._release_camera()
+                self._stop_worker()
 
             async def _do_resume(self) -> None:
-                self._init_camera()
-                self._start_streaming()
+                self._start_worker()
 
             async def _do_stop(self) -> None:
-                self._stop_streaming()
-                self._release_camera()
+                self._stop_worker()
     """
 
     def __init__(self):
@@ -449,7 +445,7 @@ class ServiceManager:
 
     Usage:
         manager = ServiceManager()
-        manager.register(camera_service)
+        manager.register(background_service)
         manager.register(motion_service)
 
         # Suspend all services

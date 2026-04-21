@@ -4,21 +4,18 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini_home_assistant_custom"
-version = "1.0.10"
+version = "1.0.11"
 description = "Deep integration of Reachy Mini robot with Home Assistant"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 dependencies = [
-    # Reachy Mini SDK with gstreamer support (for camera streaming)
+    # Reachy Mini SDK
     "reachy-mini>=1.6.3",
 
     # Audio processing (for audio file analysis)
     "soundfile>=0.13.0",
     "numpy>=2.2.5,<=2.2.5",
-
-    # Camera streaming
-    "opencv-python>=4.12.0.88",
 
     # Wake word detection (local)
     # STT/TTS is handled by Home Assistant, not locally

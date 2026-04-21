@@ -21,7 +21,6 @@ ENTITY_KEYS: dict[str, int] = {
     "speaker_volume": 103,
     "idle_behavior_enabled": 104,
     "sendspin_enabled": 105,
-    "camera_disabled": 109,
     # Phase 2: Runtime controls (200-299)
     "motor_mode": 201,
     # Phase 3: Pose control (300-399)
@@ -59,9 +58,6 @@ ENTITY_KEYS: dict[str, int] = {
     "imu_temperature": 706,
     # Phase 8: Emotion selector (800-899)
     "emotion": 800,
-    # Phase 10: Camera (1000-1099)
-    "camera_url": 1000,
-    "camera": 1001,
     # Phase 21: Continuous conversation (1500-1599)
     "continuous_conversation": 1500,
     # Phase 24: System diagnostics (1800-1899)

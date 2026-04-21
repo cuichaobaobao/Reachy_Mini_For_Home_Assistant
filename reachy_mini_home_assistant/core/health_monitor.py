@@ -70,8 +70,8 @@ class HealthChecker:
 
     Usage:
         checker = HealthChecker(
-            name="camera_server",
-            check_func=lambda: camera_server.is_running,
+            name="voice_assistant",
+            check_func=lambda: voice_assistant.is_running,
             interval=30.0,
         )
         checker.start()
@@ -176,7 +176,7 @@ class HealthMonitor:
 
     Usage:
         monitor = HealthMonitor()
-        monitor.register_checker("camera", lambda: camera.is_running)
+        monitor.register_checker("voice", lambda: voice_assistant.is_running)
         monitor.register_checker("motion", lambda: motion.is_running)
         monitor.start()
         # ...

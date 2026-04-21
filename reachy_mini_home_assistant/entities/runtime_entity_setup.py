@@ -5,8 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
-from .entity_extensions import SelectEntity, SensorEntity, SwitchEntity
+from .entity import BinarySensorEntity, NumberEntity, TextSensorEntity
+from .entity_extensions import SelectEntity, SwitchEntity
 from .entity_keys import get_entity_key
 
 if TYPE_CHECKING:
@@ -80,34 +80,6 @@ def setup_runtime_entities(registry: "EntityRegistry", entities: list) -> None:
             entity_category=1,
             value_getter=get_muted,
             value_setter=set_muted,
-        )
-    )
-
-    def get_camera_disabled() -> bool:
-        state = registry._get_server_state()
-        return not state.camera_enabled if state is not None else False
-
-    def set_camera_disabled(disabled: bool) -> None:
-        state = registry._get_server_state()
-        if state is None:
-            return
-        state.camera_enabled = not disabled
-        if registry.camera_server:
-            if disabled:
-                registry.camera_server.suspend()
-            else:
-                registry.camera_server.resume_from_suspend()
-
-    entities.append(
-        SwitchEntity(
-            server=registry.server,
-            key=get_entity_key("camera_disabled"),
-            name="Disable Camera",
-            object_id="camera_disabled",
-            icon="mdi:camera-off",
-            entity_category=1,
-            value_getter=get_camera_disabled,
-            value_setter=set_camera_disabled,
         )
     )
 
@@ -191,24 +163,3 @@ def setup_behavior_entities(registry: "EntityRegistry", entities: list) -> None:
         )
     )
     _LOGGER.debug("Behavior entities registered")
-
-
-def setup_camera_entities(registry: "EntityRegistry", entities: list) -> None:
-    def get_camera_image() -> bytes | None:
-        if registry.camera_server:
-            try:
-                return registry.camera_server.get_snapshot()
-            except Exception as e:
-                _LOGGER.debug("Failed to get camera snapshot: %s", e)
-        return None
-
-    entities.append(
-        CameraEntity(
-            server=registry.server,
-            key=get_entity_key("camera"),
-            name="Camera",
-            object_id="camera",
-            icon="mdi:camera",
-            image_getter=get_camera_image,
-        )
-    )

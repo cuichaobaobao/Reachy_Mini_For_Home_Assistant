@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     ButtonCommandRequest,
-    CameraImageRequest,
     DeviceInfoRequest,
     DeviceInfoResponse,
     HomeAssistantStateResponse,
@@ -103,7 +102,6 @@ def handle_message(protocol: "VoiceSatelliteProtocol", msg: message.Message) -> 
             SwitchCommandRequest,
             SelectCommandRequest,
             ButtonCommandRequest,
-            CameraImageRequest,
         ),
     ):
         responses = []

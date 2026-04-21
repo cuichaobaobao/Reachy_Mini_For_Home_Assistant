@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from .entity import BinarySensorEntity, CameraEntity, NumberEntity, TextSensorEntity
+from .entity import BinarySensorEntity, NumberEntity, TextSensorEntity
 from .entity_extensions import ButtonEntity, SelectEntity, SensorEntity, SwitchEntity
 from .entity_keys import get_entity_key
 
@@ -27,7 +27,6 @@ class EntityType(Enum):
     SELECT = "select"
     BUTTON = "button"
     NUMBER = "number"
-    CAMERA = "camera"
 
 
 @dataclass
@@ -166,11 +165,6 @@ def create_entity(server, definition: EntityDefinition) -> Any:
             args["value_setter"] = definition.command_handler
         args.update(definition.extra)
         return NumberEntity(**args)
-
-    elif definition.entity_type == EntityType.CAMERA:
-        args = {**common_args}
-        args.update(definition.extra)
-        return CameraEntity(**args)
 
     else:
         raise ValueError(f"Unknown entity type: {definition.entity_type}")

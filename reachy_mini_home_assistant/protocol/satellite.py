@@ -5,10 +5,6 @@ import logging
 import threading
 import time
 from collections.abc import Iterable
-from typing import TYPE_CHECKING, Optional
-
-if TYPE_CHECKING:
-    from ..vision.camera_server import MJPEGCameraServer
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
@@ -25,13 +21,11 @@ from ..models import AvailableWakeWord, ServerState
 from ..reachy_controller import ReachyController
 from .api_server import APIServer
 from .entity_bridge import (
-    bind_camera_callbacks,
     create_entity_registry,
     initialize_entities,
     load_optional_mappings,
     on_authenticated as replay_entity_states,
     run_ha_disconnected_callback,
-    update_camera_server as update_entity_bridge_camera_server,
 )
 from .message_dispatch import handle_message as dispatch_message
 from .motion_bridge import (
@@ -79,14 +73,11 @@ except Exception:
 class VoiceSatelliteProtocol(APIServer):
     """Voice satellite protocol handler for ESPHome."""
 
-    def __init__(
-        self, state: ServerState, camera_server: Optional["MJPEGCameraServer"] = None, voice_assistant_service=None
-    ) -> None:
+    def __init__(self, state: ServerState, voice_assistant_service=None) -> None:
         _LOGGER.info("VoiceSatelliteProtocol.__init__ called - new connection")
         super().__init__(state.name)
         self.state = state
         self.state.satellite = self
-        self.camera_server = camera_server
         self._voice_assistant_service = voice_assistant_service  # Store reference for mute functionality
         self._aioesphomeapi_version = _AIOESPHOMEAPI_VERSION
 
@@ -141,9 +132,6 @@ class VoiceSatelliteProtocol(APIServer):
         # Initialize entity registry
         self._entity_registry = create_entity_registry(self)
 
-        # Camera server is pure video; no analysis callbacks are registered.
-        bind_camera_callbacks(self, camera_server)
-
         self._event_emotion_mapper = EventEmotionMapper()
         self._behavior_controller = BuiltinBehaviorController(
             event_mapper=self._event_emotion_mapper,
@@ -177,13 +165,6 @@ class VoiceSatelliteProtocol(APIServer):
             self.state.tts_player.set_http_host_override(peer_host)
             self.state.music_player.set_http_host_override(peer_host)
         super().connection_made(transport)
-
-    def update_camera_server(self, camera_server):
-        """Update the camera server reference in entity registry.
-
-        Called when camera server is started after Home Assistant connection.
-        """
-        update_entity_bridge_camera_server(self, camera_server)
 
     def _load_optional_mappings(self) -> None:
         load_optional_mappings(self)

@@ -8,10 +8,7 @@ from typing import TYPE_CHECKING
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     BinarySensorStateResponse,
-    CameraImageRequest,
-    CameraImageResponse,
     ListEntitiesBinarySensorResponse,
-    ListEntitiesCameraResponse,
     ListEntitiesMediaPlayerResponse,
     ListEntitiesNumberResponse,
     ListEntitiesRequest,
@@ -355,55 +352,3 @@ class NumberEntity(ESPHomeEntity):
     def update_state(self) -> None:
         """Send state update to Home Assistant."""
         self.server.send_messages([self._get_state_message()])
-
-
-class CameraEntity(ESPHomeEntity):
-    """Camera entity for ESPHome (provides image snapshots)."""
-
-    def __init__(
-        self,
-        server: "APIServer",
-        key: int,
-        name: str,
-        object_id: str,
-        icon: str = "mdi:camera",
-        image_getter: Callable[[], bytes | None] | None = None,
-    ) -> None:
-        ESPHomeEntity.__init__(self, server)
-        self.key = key
-        self.name = name
-        self.object_id = object_id
-        self.icon = icon
-        self._image_getter = image_getter
-
-    def get_image(self) -> bytes | None:
-        """Get the current camera image as JPEG bytes."""
-        if self._image_getter:
-            return self._image_getter()
-        return None
-
-    def handle_message(self, msg: message.Message) -> Iterable[message.Message]:
-        if isinstance(msg, ListEntitiesRequest):
-            yield ListEntitiesCameraResponse(
-                object_id=self.object_id,
-                key=self.key,
-                name=self.name,
-                icon=self.icon,
-            )
-        elif isinstance(msg, CameraImageRequest):
-            # CameraImageRequest doesn't have a key field - it's a global request
-            # Return camera image for any camera request
-            image_data = self.get_image()
-            if image_data:
-                yield CameraImageResponse(
-                    key=self.key,
-                    data=image_data,
-                    done=True,
-                )
-            else:
-                # Return empty response if no image available
-                yield CameraImageResponse(
-                    key=self.key,
-                    data=b"",
-                    done=True,
-                )

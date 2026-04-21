@@ -21,7 +21,6 @@ class ReachyMiniMotion:
     def __init__(self, reachy_mini):
         self.reachy_mini = reachy_mini
         self._movement_manager: MovementManager | None = None
-        self._camera_server = None
         self._is_speaking = False
 
         _LOGGER.debug("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
@@ -41,10 +40,6 @@ class ReachyMiniMotion:
             self._movement_manager = MovementManager(reachy_mini)
         else:
             self._movement_manager.robot = reachy_mini
-
-    def set_camera_server(self, camera_server):
-        """Store the camera server reference for lifecycle coordination."""
-        self._camera_server = camera_server
 
     def start(self):
         """Start the movement manager control loop."""
