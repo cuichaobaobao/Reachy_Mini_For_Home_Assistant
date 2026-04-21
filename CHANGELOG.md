@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.12] - 2026-04-21
+
+### Fixed
+- Serialize microphone reads with TTS audio pushes on the SDK media pipeline to reduce TTS stutter when an external RTSP/WebRTC video bridge is active.
+
 ## [1.0.11] - 2026-04-21
 
 ### Removed

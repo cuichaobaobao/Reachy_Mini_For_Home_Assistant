@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.12",
+    "date": "2026-04-21",
+    "changes": [
+      "Build: Bump package version to 1.0.12",
+      "Fix: Serialize microphone reads with TTS audio pushes on the SDK media pipeline to reduce TTS stutter when an external RTSP/WebRTC video bridge is active"
+    ]
+  },
+  {
     "version": "1.0.11",
     "date": "2026-04-21",
     "changes": [
