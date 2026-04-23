@@ -1,7 +1,7 @@
 """Motion control module for Reachy Mini.
 
 This module handles all motion-related functionality:
-- MovementManager: Core 100Hz motion control loop
+- MovementManager: Core 60Hz motion control loop
 - ReachyMiniMotion: High-level motion API
 - StateMachine: Movement state management (RobotState, MovementState)
 - Smoothing: Interpolation and transition algorithms

@@ -68,7 +68,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Control loop defaults (actual values come from Config.motion)
-DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 100
+DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 60
 MAX_CONTROL_DT_S = 0.05
 
 IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.4  # Slightly longer fade avoids visible idle/action handoff steps

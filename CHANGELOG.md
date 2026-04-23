@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.15] - 2026-04-23
+
+### Changed
+- Align the motion control loop with the official Reachy Mini conversation app at 60Hz to reduce long-running motor command pressure and improve antenna/head smoothness.
+
 ## [1.0.14] - 2026-04-21
 
 ### Changed

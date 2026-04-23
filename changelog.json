@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.15",
+    "date": "2026-04-23",
+    "changes": [
+      "Build: Bump package version to 1.0.15",
+      "Change: Align the motion control loop with the official Reachy Mini conversation app at 60Hz to reduce long-running motor command pressure and improve antenna/head smoothness"
+    ]
+  },
+  {
     "version": "1.0.14",
     "date": "2026-04-21",
     "changes": [
