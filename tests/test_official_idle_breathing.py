@@ -65,15 +65,15 @@ class OfficialIdleBreathingTests(unittest.TestCase):
 
         self.assertGreater(offsets["pitch"], 0.03)
 
-    def test_speaking_animation_matches_ha_china_base_motion(self):
+    def test_speaking_head_motion_is_audio_driven_only(self):
         config = json.loads(Path("reachy_mini_home_assistant/animations/conversation_animations.json").read_text())
         speaking = config["animations"]["speaking"]
 
         self.assertEqual(speaking["antenna_move_name"], "wiggle")
-        self.assertAlmostEqual(speaking["pitch_amplitude_rad"], 0.06)
-        self.assertAlmostEqual(speaking["yaw_amplitude_rad"], 0.05)
-        self.assertAlmostEqual(speaking["roll_amplitude_rad"], 0.04)
-        self.assertAlmostEqual(speaking["z_amplitude_m"], 0.004)
+        self.assertAlmostEqual(speaking["pitch_amplitude_rad"], 0.0)
+        self.assertAlmostEqual(speaking["yaw_amplitude_rad"], 0.0)
+        self.assertAlmostEqual(speaking["roll_amplitude_rad"], 0.0)
+        self.assertAlmostEqual(speaking["z_amplitude_m"], 0.0)
         self.assertAlmostEqual(speaking["antenna_amplitude_rad"], 0.35)
         self.assertAlmostEqual(speaking["antenna_frequency_hz"], 0.32)
         self.assertAlmostEqual(speaking["frequency_hz"], 0.32)

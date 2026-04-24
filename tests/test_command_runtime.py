@@ -106,6 +106,19 @@ class MotionTimingSourceTests(unittest.TestCase):
         self.assertIn('manager._pending_action.name in {"neutral", "neutral_yaw"}', content)
         self.assertIn("not (active_turn_action or active_recenter_action)", content)
 
+    def test_tts_head_motion_uses_official_style_wobbler_thread(self):
+        stream_pcm = Path("reachy_mini_home_assistant/audio/audio_player_stream_pcm.py").read_text(encoding="utf-8")
+        head_wobbler = Path("reachy_mini_home_assistant/audio/head_wobbler.py").read_text(encoding="utf-8")
+
+        self.assertIn("from .head_wobbler import HeadWobbler", stream_pcm)
+        self.assertIn("wobbler.start()", stream_pcm)
+        self.assertIn('ctx["wobbler"].feed(pcm, sample_rate)', stream_pcm)
+        self.assertIn('ctx["wobbler"].finish()', stream_pcm)
+        self.assertIn("queue.Queue", head_wobbler)
+        self.assertIn("SpeechSwayRT", head_wobbler)
+        self.assertIn("MOVEMENT_LATENCY_S", head_wobbler)
+        self.assertIn("_audio_queue.put", head_wobbler)
+
 
 class VoicePipelineStopTests(unittest.TestCase):
     def _make_protocol(self):

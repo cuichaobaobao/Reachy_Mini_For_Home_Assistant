@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import time
 
-from .audio_player_shared import MOVEMENT_LATENCY_S, STREAM_FETCH_CHUNK_SIZE, _LOGGER, sniff_audio_content_type
+from .audio_player_shared import (
+    _LOGGER,
+    STREAM_FETCH_CHUNK_SIZE,
+    sniff_audio_content_type,
+)
 
 
 class AudioPlayerLocalMixin:
@@ -79,9 +83,9 @@ class AudioPlayerLocalMixin:
         return ".bin"
 
     def _play_local_file(self, file_path: str) -> None:
+        wobbler = None
         try:
             duration: float | None = None
-            sway_frames: list[dict] = []
             try:
                 import soundfile as sf
 
@@ -97,21 +101,21 @@ class AudioPlayerLocalMixin:
                     data, sample_rate = sf.read(file_path)
                     if duration is None and sample_rate > 0:
                         duration = len(data) / sample_rate
-                    from ..motion.speech_sway import SpeechSwayRT
+                    from .head_wobbler import HeadWobbler
 
-                    sway = SpeechSwayRT()
-                    sway_frames = sway.feed(data, sample_rate)
+                    wobbler = HeadWobbler(self._sway_callback)
+                    wobbler.start()
+                    wobbler.feed(data, sample_rate)
                 except Exception:
-                    sway_frames = []
+                    if wobbler is not None:
+                        wobbler.stop()
+                    wobbler = None
             self.reachy_mini.media.play_sound(file_path)
             start_time = time.monotonic()
-            frame_duration = 0.05
-            frame_idx = 0
             has_duration = (duration is not None) and (duration > 0)
             duration_s = duration if has_duration and duration is not None else 0.0
             max_duration = (duration_s * 1.5) if has_duration else 60.0
             playback_timeout = start_time + max_duration
-            sway_base_ts = start_time + MOVEMENT_LATENCY_S
             while True:
                 now = time.monotonic()
                 if now > playback_timeout:
@@ -130,23 +134,7 @@ class AudioPlayerLocalMixin:
                             break
                     except Exception:
                         pass
-                if self._sway_callback and frame_idx < len(sway_frames):
-                    target_frame = frame_idx
-                    while target_frame < len(sway_frames) and now >= (sway_base_ts + target_frame * frame_duration):
-                        target_frame += 1
-                    while frame_idx < target_frame and frame_idx < len(sway_frames):
-                        self._sway_callback(sway_frames[frame_idx])
-                        frame_idx += 1
-                next_sleep = 0.02
-                if self._sway_callback and frame_idx < len(sway_frames):
-                    next_sway_ts = sway_base_ts + frame_idx * frame_duration
-                    next_sleep = min(next_sleep, max(0.0, next_sway_ts - now))
-                time.sleep(next_sleep)
+                time.sleep(0.02)
         finally:
-            if self._sway_callback:
-                try:
-                    self._sway_callback(
-                        {"pitch_rad": 0.0, "yaw_rad": 0.0, "roll_rad": 0.0, "x_m": 0.0, "y_m": 0.0, "z_m": 0.0}
-                    )
-                except Exception:
-                    pass
+            if wobbler is not None:
+                wobbler.finish()

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.34] - 2026-04-25
+
+### Changed
+- Make TTS head motion official-style and fully audio-driven by feeding TTS PCM into a dedicated HeadWobbler worker.
+- Remove the speaking head pose preset so pitch, yaw, roll, and z motion come from audio sway only.
+- Keep the HA-China speaking antenna sway and the body yaw fixed protection during active TTS.
+
 ## [1.0.33] - 2026-04-24
 
 ### Changed

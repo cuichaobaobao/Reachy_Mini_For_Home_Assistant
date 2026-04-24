@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from .audio_player_shared import MOVEMENT_LATENCY_S, STREAM_FETCH_CHUNK_SIZE, SWAY_FRAME_DT_S, UNTHROTTLED_PREROLL_S
+from .audio_player_shared import STREAM_FETCH_CHUNK_SIZE, UNTHROTTLED_PREROLL_S
 
 
 class AudioPlayerStreamPCMMixin:
@@ -105,9 +105,11 @@ class AudioPlayerStreamPCMMixin:
         if self._sway_callback is None:
             return None
         try:
-            from ..motion.speech_sway import SpeechSwayRT
+            from .head_wobbler import HeadWobbler
 
-            return {"sway": SpeechSwayRT(), "base_ts": time.monotonic(), "frames_done": 0}
+            wobbler = HeadWobbler(self._sway_callback)
+            wobbler.start()
+            return {"wobbler": wobbler}
         except Exception:
             return None
 
@@ -115,18 +117,7 @@ class AudioPlayerStreamPCMMixin:
         if ctx is None or self._sway_callback is None:
             return
         try:
-            sway = ctx["sway"]
-            results = sway.feed(pcm, sample_rate)
-            if not results:
-                return
-            base_ts = float(ctx["base_ts"])
-            for item in results:
-                target = base_ts + MOVEMENT_LATENCY_S + ctx["frames_done"] * SWAY_FRAME_DT_S
-                now = time.monotonic()
-                if target > now:
-                    time.sleep(min(0.02, target - now))
-                self._sway_callback(item)
-                ctx["frames_done"] += 1
+            ctx["wobbler"].feed(pcm, sample_rate)
         except Exception:
             pass
 
@@ -134,6 +125,6 @@ class AudioPlayerStreamPCMMixin:
         if ctx is None or self._sway_callback is None:
             return
         try:
-            self._sway_callback({"pitch_rad": 0.0, "yaw_rad": 0.0, "roll_rad": 0.0, "x_m": 0.0, "y_m": 0.0, "z_m": 0.0})
+            ctx["wobbler"].finish()
         except Exception:
             pass

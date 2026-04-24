@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.34",
+    "date": "2026-04-25",
+    "changes": [
+      "Build: Bump package version to 1.0.34",
+      "Change: Make TTS head motion official-style and fully audio-driven through a dedicated HeadWobbler worker",
+      "Change: Remove the speaking head pose preset so pitch, yaw, roll, and z motion come from audio sway only",
+      "Keep: Preserve HA-China speaking antenna sway and body yaw fixed protection during active TTS"
+    ]
+  },
+  {
     "version": "1.0.33",
     "date": "2026-04-24",
     "changes": [
