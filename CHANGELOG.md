@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.18] - 2026-04-24
+
+### Fixed
+- Fix generated idle motion completion tracking so realtime idle actions can keep triggering instead of getting stuck after a generated action.
+- Smooth idle antenna output before sending targets to the robot to reduce visible step jitter while keeping the official breathing parameters.
+- Report `Backend Ready` as practical daemon operational readiness because the daemon's internal `backend_status.ready` flag can stay false on wireless robots even while the app, motors, and control loop are healthy.
+
 ## [1.0.17] - 2026-04-24
 
 ### Changed

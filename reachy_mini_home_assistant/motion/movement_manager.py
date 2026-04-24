@@ -182,6 +182,7 @@ class MovementManager:
         # Idle antenna smoothing state
         self._idle_antenna_smoothed: tuple[float, float] | None = None
         self._last_idle_antenna_update = 0.0
+        self._idle_antenna_smoothing_tau_s = 0.12
 
         # Command send pacing (separate from control loop frequency)
         control_rate = max(1.0, float(Config.motion.control_rate_hz or DEFAULT_CONTROL_LOOP_FREQUENCY_HZ))
@@ -768,10 +769,12 @@ class MovementManager:
 
             self._pending_action = None
 
+            completed_idle_action = completed_action.name.startswith(("idle_action", "idle_generated"))
+
             # Keep idle action state active until the full idle action queue is drained
-            if completed_action.name.startswith("idle_action") and self._idle_action_queue:
+            if completed_idle_action and self._idle_action_queue:
                 self._start_action(self._idle_action_queue.popleft())
-            elif completed_action.name.startswith("idle_action") or completed_action.name == "look_around":
+            elif completed_idle_action or completed_action.name == "look_around":
                 self.state.look_around_in_progress = False
 
     def _update_animation(self, dt: float) -> None:
@@ -781,7 +784,10 @@ class MovementManager:
             self.state.robot_state == RobotState.IDLE
             and self.state.look_around_in_progress
             and (
-                (self._pending_action is not None and self._pending_action.name.startswith("idle_action"))
+                (
+                    self._pending_action is not None
+                    and self._pending_action.name.startswith(("idle_action", "idle_generated"))
+                )
                 or len(self._idle_action_queue) > 0
             )
         )

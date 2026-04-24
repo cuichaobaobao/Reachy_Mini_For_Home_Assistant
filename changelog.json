@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.18",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.18",
+      "Fix: Let generated idle actions complete cleanly so realtime idle motion keeps triggering",
+      "Fix: Smooth idle antenna output to reduce visible step jitter while preserving official breathing parameters",
+      "Fix: Report Backend Ready as practical daemon operational readiness on wireless robots"
+    ]
+  },
+  {
     "version": "1.0.17",
     "date": "2026-04-24",
     "changes": [

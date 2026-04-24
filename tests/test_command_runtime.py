@@ -50,6 +50,8 @@ class MotionTimingSourceTests(unittest.TestCase):
         self.assertIn("antenna_delta > ANTENNA_LARGE_MOVE_THRESHOLD_RAD", content)
         self.assertIn("pose_progress = min(1.0, elapsed / pose_duration)", content)
         self.assertIn("antenna_progress = min(1.0, elapsed / antenna_duration)", content)
+        self.assertIn('completed_action.name.startswith(("idle_action", "idle_generated"))', content)
+        self.assertIn('self._pending_action.name.startswith(("idle_action", "idle_generated"))', content)
         self.assertIn("def reset_yaw_to_neutral", content)
         self.assertIn('name="neutral_yaw"', content)
 

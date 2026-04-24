@@ -137,11 +137,20 @@ class ReachyController:
         return str(self._status_value(status, "state", "unknown"))
 
     def get_backend_ready(self) -> bool:
-        """Check the daemon's real backend readiness flag."""
+        """Check whether the robot daemon is operational for this app.
+
+        The SDK daemon's internal backend_status.ready flag can stay false on
+        wireless robots even while media, motors, and the control loop are
+        healthy. Home Assistant uses this entity as a connectivity-style
+        status, so report the practical daemon readiness instead.
+        """
         status = self._get_cached_status()
         if status is None:
             return False
-        return bool(self._nested_status_value(status, "backend_status", "ready", False))
+        state = str(self._status_value(status, "state", "")).lower()
+        error = self._status_value(status, "error", None)
+        backend_error = self._nested_status_value(status, "backend_status", "error", None)
+        return (state == "running" or state.endswith(".running")) and not error and not backend_error
 
     def get_error_message(self) -> str:
         """Get current error message with caching."""

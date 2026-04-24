@@ -69,6 +69,18 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
     if manager.state.robot_state != RobotState.IDLE:
         manager._idle_antenna_smoothed = None
         manager._last_idle_antenna_update = 0.0
+    elif manager._idle_antenna_enabled:
+        now = manager._now()
+        if manager._idle_antenna_smoothed is None:
+            manager._idle_antenna_smoothed = (antenna_left, antenna_right)
+        else:
+            dt = max(0.0, now - manager._last_idle_antenna_update)
+            alpha = min(1.0, dt / max(1e-3, manager._idle_antenna_smoothing_tau_s))
+            prev_left, prev_right = manager._idle_antenna_smoothed
+            antenna_left = prev_left + alpha * (antenna_left - prev_left)
+            antenna_right = prev_right + alpha * (antenna_right - prev_right)
+            manager._idle_antenna_smoothed = (antenna_left, antenna_right)
+        manager._last_idle_antenna_update = now
 
     final_head_yaw = extract_yaw_from_pose(final_head)
     target_body_yaw = clamp_body_yaw(final_head_yaw)
