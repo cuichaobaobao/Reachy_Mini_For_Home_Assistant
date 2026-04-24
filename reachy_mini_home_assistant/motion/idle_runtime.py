@@ -8,7 +8,7 @@ import random
 from typing import TYPE_CHECKING
 
 from .state_machine import (
-    OFFICIAL_BREATHING_FREQUENCY_HZ,
+    IDLE_BREATHING_FREQUENCY_HZ,
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
     PendingAction,
@@ -132,7 +132,7 @@ def _random_breathing_window_after_idle_action(manager: MovementManager) -> floa
     cycle_min, cycle_max = manager._idle_generation_config.breath_cycle_range
     cycle_min = max(1, int(cycle_min))
     cycle_max = max(cycle_min, int(cycle_max))
-    breath_period_s = 1.0 / max(0.01, OFFICIAL_BREATHING_FREQUENCY_HZ)
+    breath_period_s = 1.0 / max(0.01, IDLE_BREATHING_FREQUENCY_HZ)
     return random.randint(cycle_min, cycle_max) * breath_period_s
 
 

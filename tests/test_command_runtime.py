@@ -70,15 +70,16 @@ class MotionTimingSourceTests(unittest.TestCase):
         self.assertIn("def reset_yaw_to_neutral", content)
         self.assertIn('name="neutral_yaw"', content)
 
-    def test_idle_generated_keeps_antennas_alive_and_smooths_breathing_z(self):
+    def test_idle_generated_keeps_antennas_alive_and_uses_raw_breathing_z(self):
         path = Path("reachy_mini_home_assistant/motion/movement_manager.py")
         content = path.read_text(encoding="utf-8")
 
         self.assertIn("IDLE_ACTION_ANTENNA_SUPPRESSION = 0.0", content)
-        self.assertIn("IDLE_BREATHING_Z_SMOOTHING_TAU_UP_S", content)
-        self.assertIn("IDLE_BREATHING_Z_SMOOTHING_TAU_DOWN_S", content)
-        self.assertIn("IDLE_BREATHING_Z_DEADBAND_M", content)
-        self.assertIn("self._idle_breathing_z_smoothed", content)
+        self.assertNotIn("IDLE_BREATHING_Z_SMOOTHING_TAU_UP_S", content)
+        self.assertNotIn("IDLE_BREATHING_Z_SMOOTHING_TAU_DOWN_S", content)
+        self.assertNotIn("IDLE_BREATHING_Z_DEADBAND_M", content)
+        self.assertNotIn("self._idle_breathing_z_smoothed", content)
+        self.assertIn('self.state.anim_z = offsets["z"] * idle_animation_scale', content)
 
     def test_disabled_idle_rest_return_is_gentler(self):
         path = Path("reachy_mini_home_assistant/motion/reachy_motion.py")

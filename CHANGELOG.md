@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.33] - 2026-04-24
+
+### Changed
+- Raise the motion control loop target from 60Hz to 100Hz to match the official and HA-China motion cadence.
+- Switch idle breathing to the HA-China timing: 5mm z motion at 0.24Hz with 15 degree antenna wiggle at 0.5Hz.
+- Match HA-China thinking and speaking animation parameters while keeping body yaw fixed during active TTS.
+
+### Removed
+- Remove the extra idle breathing z smoothing and deadband so the breathing layer uses the raw sine output without secondary filtering.
+
 ## [1.0.32] - 2026-04-24
 
 ### Fixed

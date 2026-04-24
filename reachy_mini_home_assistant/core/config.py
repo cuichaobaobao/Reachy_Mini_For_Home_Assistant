@@ -65,8 +65,8 @@ class MotionConfig:
     """Configuration for motion control."""
 
     # Control loop
-    control_rate_hz: float = 60.0
-    control_interval: float = 1.0 / 60.0  # 1 / control_rate_hz
+    control_rate_hz: float = 100.0
+    control_interval: float = 1.0 / 100.0  # 1 / control_rate_hz
     max_send_rate_hz: float = 15.0  # Hard cap for set_target send rate
     idle_heartbeat_interval_s: float = 1.0  # Keepalive interval when pose unchanged
 

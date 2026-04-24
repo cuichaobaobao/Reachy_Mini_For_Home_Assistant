@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.33",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.33",
+      "Change: Raise the motion control loop target from 60Hz to 100Hz",
+      "Change: Switch idle breathing to HA-China timing with 5mm z motion at 0.24Hz and 15 degree antenna wiggle at 0.5Hz",
+      "Change: Match HA-China thinking and speaking animation parameters while keeping body yaw fixed during active TTS",
+      "Remove: Drop the extra idle breathing z smoothing and deadband so breathing uses raw sine output"
+    ]
+  },
+  {
     "version": "1.0.32",
     "date": "2026-04-24",
     "changes": [

@@ -71,14 +71,11 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Control loop defaults (actual values come from Config.motion)
-DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 60
+DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 100
 MAX_CONTROL_DT_S = 0.05
 
 IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.7  # Crossfade head breathing in/out around generated idle actions
 IDLE_ACTION_ANTENNA_SUPPRESSION = 0.0  # Keep official antenna breathing fully active during generated idle actions
-IDLE_BREATHING_Z_SMOOTHING_TAU_UP_S = 0.2
-IDLE_BREATHING_Z_SMOOTHING_TAU_DOWN_S = 0.75  # Slower downward breath reduces visible motor micro-jitter
-IDLE_BREATHING_Z_DEADBAND_M = 0.00028
 ANTENNA_LARGE_MOVE_THRESHOLD_RAD = 1.0
 ANTENNA_WAKE_MIN_DURATION_S = 1.0
 ANTENNA_WAKE_ACTIONS = frozenset({"turn_to", "doa_turn", "wake_from_idle_rest"})
@@ -174,7 +171,6 @@ class MovementManager:
         self._action_start_pose: dict[str, float] = {}
         self._idle_action_queue: deque[PendingAction] = deque()
         self._idle_action_animation_suppression = 0.0
-        self._idle_breathing_z_smoothed = 0.0
         self._manual_head_yaw_hold = False
 
         # Last sent pose for change detection (reduce daemon load)
@@ -842,19 +838,7 @@ class MovementManager:
         self.state.anim_roll = offsets["roll"] * idle_animation_scale
         self.state.anim_x = offsets["x"] * idle_animation_scale
         self.state.anim_y = offsets["y"] * idle_animation_scale
-        anim_z = offsets["z"] * idle_animation_scale
-        if self.state.robot_state == RobotState.IDLE and idle_animation_scale > 0.0:
-            z_delta = anim_z - self._idle_breathing_z_smoothed
-            if abs(z_delta) < IDLE_BREATHING_Z_DEADBAND_M:
-                anim_z = self._idle_breathing_z_smoothed
-            else:
-                tau = IDLE_BREATHING_Z_SMOOTHING_TAU_DOWN_S if z_delta < 0.0 else IDLE_BREATHING_Z_SMOOTHING_TAU_UP_S
-                alpha = min(1.0, dt_safe / tau)
-                self._idle_breathing_z_smoothed += alpha * z_delta
-                anim_z = self._idle_breathing_z_smoothed
-        else:
-            self._idle_breathing_z_smoothed = anim_z
-        self.state.anim_z = anim_z
+        self.state.anim_z = offsets["z"] * idle_animation_scale
         if self.state.robot_state != RobotState.IDLE or self._idle_antenna_enabled:
             self.state.anim_antenna_left = offsets["antenna_left"] * antenna_animation_scale
             self.state.anim_antenna_right = offsets["antenna_right"] * antenna_animation_scale

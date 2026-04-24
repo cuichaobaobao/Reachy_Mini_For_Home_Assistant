@@ -7,9 +7,8 @@ from unittest.mock import patch
 from reachy_mini_home_assistant.motion import animation_player as animation_player_module
 from reachy_mini_home_assistant.motion.animation_player import AnimationPlayer
 from reachy_mini_home_assistant.motion.state_machine import (
-    OFFICIAL_BREATHING_ANTENNA_AMPLITUDE_RAD,
+    IDLE_BREATHING_FREQUENCY_HZ,
     OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ,
-    OFFICIAL_BREATHING_FREQUENCY_HZ,
     OFFICIAL_BREATHING_Z_AMPLITUDE_M,
 )
 
@@ -23,7 +22,7 @@ class _Clock:
 
 
 class OfficialIdleBreathingTests(unittest.TestCase):
-    def test_idle_animation_layer_matches_official_breathing_formula(self):
+    def test_idle_animation_layer_matches_ha_china_breathing_formula(self):
         clock = _Clock(100.0)
         with patch.object(animation_player_module.time, "perf_counter", clock.perf_counter):
             player = AnimationPlayer()
@@ -36,9 +35,9 @@ class OfficialIdleBreathingTests(unittest.TestCase):
 
         elapsed = player._transition_duration + player._interpolation_duration + 0.25
         expected_z = OFFICIAL_BREATHING_Z_AMPLITUDE_M * math.sin(
-            2.0 * math.pi * OFFICIAL_BREATHING_FREQUENCY_HZ * elapsed
+            2.0 * math.pi * IDLE_BREATHING_FREQUENCY_HZ * elapsed
         )
-        expected_sway = OFFICIAL_BREATHING_ANTENNA_AMPLITUDE_RAD * math.sin(
+        expected_sway = 0.262 * math.sin(
             2.0 * math.pi * OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ * elapsed
         )
 
@@ -66,14 +65,18 @@ class OfficialIdleBreathingTests(unittest.TestCase):
 
         self.assertGreater(offsets["pitch"], 0.03)
 
-    def test_speaking_antenna_wiggle_matches_official_breathing_antenna_timing(self):
+    def test_speaking_animation_matches_ha_china_base_motion(self):
         config = json.loads(Path("reachy_mini_home_assistant/animations/conversation_animations.json").read_text())
         speaking = config["animations"]["speaking"]
 
         self.assertEqual(speaking["antenna_move_name"], "wiggle")
-        self.assertAlmostEqual(speaking["antenna_amplitude_rad"], OFFICIAL_BREATHING_ANTENNA_AMPLITUDE_RAD)
-        self.assertAlmostEqual(speaking["antenna_frequency_hz"], OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ)
-        self.assertAlmostEqual(speaking["frequency_hz"], OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ)
+        self.assertAlmostEqual(speaking["pitch_amplitude_rad"], 0.06)
+        self.assertAlmostEqual(speaking["yaw_amplitude_rad"], 0.05)
+        self.assertAlmostEqual(speaking["roll_amplitude_rad"], 0.04)
+        self.assertAlmostEqual(speaking["z_amplitude_m"], 0.004)
+        self.assertAlmostEqual(speaking["antenna_amplitude_rad"], 0.35)
+        self.assertAlmostEqual(speaking["antenna_frequency_hz"], 0.32)
+        self.assertAlmostEqual(speaking["frequency_hz"], 0.32)
 
     def test_disabled_idle_rest_pose_uses_historical_sleep_posture(self):
         config = json.loads(Path("reachy_mini_home_assistant/animations/conversation_animations.json").read_text())
