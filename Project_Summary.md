@@ -10,19 +10,18 @@ This custom app turns Reachy Mini Wi-Fi into a Home Assistant voice satellite wi
 - Built-in Reachy Mini listening, thinking, speaking, timer, idle, and emotion motions
 - DOA sound-source orientation at wake
 - Smooth manual head yaw control with body yaw following and hold behavior
-- Optional Sendspin multi-room audio playback
-- System diagnostics, pose controls, IMU sensors, and runtime controls exposed as Home Assistant entities
+- Pose controls, DOA, IMU sensors, robot status, and runtime controls exposed as Home Assistant entities
 
 ## Home Assistant Entities
 
 Main entity groups:
 
-- Runtime controls: mute, speaker volume, idle behavior, Sendspin
-- Pose controls: head position/orientation, body yaw, antennas, look-at target
+- Runtime controls: mute, speaker volume, idle behavior
+- Pose controls: head position/orientation, body yaw, antennas
 - DOA sensors and DOA tracking switch
 - Emotion selector and continuous conversation switch
 - Robot diagnostics and IMU sensors
-- Service state and system diagnostics
+- Service state
 
 ## Motion Behavior
 
@@ -32,7 +31,7 @@ Motion is centralized through `MovementManager`. The current behavior preserves:
 - Body yaw following manual and DOA turn actions
 - Smooth return-to-neutral after conversation unless manual yaw hold is active
 - Idle rest posture when idle behavior is disabled
-- Breathing, antenna, speaking sway, and emotion motions
+- Official breathing parameters, audio-driven speaking sway, generated idle micro-motions, and emotion motions
 
 ## Removed Runtime Scope
 

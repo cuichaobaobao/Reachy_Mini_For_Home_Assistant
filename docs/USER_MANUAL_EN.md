@@ -22,7 +22,6 @@ The app automatically:
 - Starts the ESPHome satellite service on port 6053
 - Loads local wake word models
 - Registers with mDNS for Home Assistant discovery
-- Connects to a Sendspin server if one is available on the network
 
 ### Step 3: Connect to Home Assistant
 **Automatic recommended:**
@@ -52,7 +51,7 @@ Home Assistant discovers Reachy Mini through mDNS.
 
 ### Motion and Idle Behavior
 - Built-in motions for wake, listening, thinking, speaking, timer alerts, and emotions
-- Idle breathing, antenna motion, and idle micro-actions
+- Official idle breathing, antenna motion, and realtime generated idle micro-actions
 - Smooth manual Head Yaw control with hold behavior
 - Body yaw follows manual and sound-source turns
 - Conversation end recenters or preserves manual yaw according to the current hold state
@@ -71,15 +70,6 @@ The robot can play 35 emotion moves, including happy, sad, angry, surprised, lau
 - Wake sound and timer-finished sound playback
 - Home Assistant handles STT and TTS engines
 
-### Sendspin Multi-Room Audio
-- Automatic discovery of Sendspin servers via mDNS
-- Synchronized multi-room audio playback
-- Reachy Mini acts as a player receiving audio streams
-- Auto-pauses during voice conversations
-- No user configuration required
-
----
-
 ## Home Assistant Entities
 
 ### Phase 1: Basic Status
@@ -90,7 +80,6 @@ The robot can play 35 emotion moves, including happy, sad, angry, surprised, lau
 | Mute | Switch | Suspend/resume voice pipeline |
 | Speaker Volume | Number 0-100% | Speaker volume control |
 | Idle Behavior | Switch | Unified idle motion, antenna motion, and micro-actions |
-| Sendspin | Switch | Enable/disable Sendspin discovery and playback |
 
 ### Phase 2: Runtime State
 | Entity | Type | Description |
@@ -104,11 +93,6 @@ The robot can play 35 emotion moves, including happy, sad, angry, surprised, lau
 | Head Roll/Pitch/Yaw | Number | ±40° |
 | Body Yaw | Number | ±160° |
 | Antenna Left/Right | Number | ±90° |
-
-### Phase 4: Look At Control
-| Entity | Type | Description |
-|--------|------|-------------|
-| Look At X/Y/Z | Number | World coordinates for gaze target |
 
 ### Phase 5: DOA Direction of Arrival
 | Entity | Type | Description |
@@ -145,21 +129,6 @@ The robot can play 35 emotion moves, including happy, sad, angry, surprised, lau
 |--------|------|-------------|
 | Continuous Conversation | Switch | Multi-turn conversation mode |
 
-### Phase 24: System Diagnostics
-| Entity | Type | Description |
-|--------|------|-------------|
-| CPU Percent | Sensor % | CPU usage |
-| CPU Temperature | Sensor °C | CPU temperature |
-| Memory Percent | Sensor % | RAM usage |
-| Memory Used | Sensor GB | RAM used |
-| Disk Percent | Sensor % | Disk usage |
-| Disk Free | Sensor GB | Disk free space |
-| Uptime | Sensor hours | System uptime |
-| Process CPU | Sensor % | App CPU usage |
-| Process Memory | Sensor MB | App memory use |
-
----
-
 ## Troubleshooting
 
 | Problem | Solution |
@@ -181,4 +150,4 @@ ESPHome Port:  6053
 
 ---
 
-*Reachy Mini Voice Assistant v1.0.13*
+*Reachy Mini Voice Assistant v1.0.17*

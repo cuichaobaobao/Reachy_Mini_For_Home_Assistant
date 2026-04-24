@@ -4,7 +4,6 @@ This module now also contains idle-behavior data helpers so the control-loop
 implementation can stay focused on runtime orchestration.
 """
 
-import json
 import logging
 import math
 import random
@@ -126,7 +125,22 @@ class IdleBehaviorConfig:
     min_interval_s: float
     max_interval_s: float
     trigger_probability: float
-    actions: list[dict[str, Any]]
+    generation: "IdleGenerationConfig"
+
+
+@dataclass
+class IdleGenerationConfig:
+    """Realtime generated idle motion ranges."""
+
+    yaw_range_deg: tuple[float, float]
+    pitch_range_deg: tuple[float, float]
+    roll_range_deg: tuple[float, float]
+    x_range_m: tuple[float, float]
+    y_range_m: tuple[float, float]
+    z_range_m: tuple[float, float]
+    duration_range_s: tuple[float, float]
+    opposite_direction_bias: float
+    micro_motion_probability: float
 
 
 def parse_numeric_range(value: Any, default_min: float, default_max: float) -> tuple[float, float]:
@@ -151,11 +165,18 @@ def parse_numeric_range(value: Any, default_min: float, default_max: float) -> t
         return default_min, default_max
 
 
+def parse_probability(value: Any, default: float) -> float:
+    """Parse a probability-like value in the 0..1 range."""
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
 def load_idle_behavior_config(
     *,
     config_path: Path,
     default_rest_pose: dict[str, float],
-    default_actions: list[dict[str, Any]],
     default_min_interval_s: float,
     default_max_interval_s: float,
     default_probability: float,
@@ -164,7 +185,6 @@ def load_idle_behavior_config(
     default_duration_s: float,
 ) -> IdleBehaviorConfig:
     """Load idle behavior configuration from the unified animation file."""
-    actions = list(default_actions)
     rest_pose = IdleRestPose(
         pitch_rad=math.radians(float(default_rest_pose["pitch_deg"])),
         antenna_left_rad=float(default_rest_pose["antenna_left_rad"]),
@@ -173,16 +193,27 @@ def load_idle_behavior_config(
     min_interval_s = default_min_interval_s
     max_interval_s = default_max_interval_s
     trigger_probability = default_probability
+    generation = IdleGenerationConfig(
+        yaw_range_deg=(-default_yaw_range_deg, default_yaw_range_deg),
+        pitch_range_deg=(-default_pitch_range_deg, default_pitch_range_deg),
+        roll_range_deg=(-6.0, 6.0),
+        x_range_m=(-0.002, 0.002),
+        y_range_m=(-0.002, 0.002),
+        z_range_m=(-0.002, 0.003),
+        duration_range_s=(max(0.2, default_duration_s * 0.55), max(0.2, default_duration_s * 1.25)),
+        opposite_direction_bias=0.68,
+        micro_motion_probability=0.18,
+    )
 
     if not config_path.exists():
         logger.debug("Idle behavior config file not found: %s", config_path)
-        return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, actions)
+        return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, generation)
 
     try:
         config = load_animation_config(config_path)
     except Exception as e:
         logger.warning("Failed to read idle behavior config: %s", e)
-        return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, actions)
+        return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, generation)
 
     rest_pose_section = config.get("idle_rest_pose")
     if isinstance(rest_pose_section, dict):
@@ -205,9 +236,9 @@ def load_idle_behavior_config(
         except (TypeError, ValueError):
             pass
 
-    section = config.get("idle_random_actions")
+    section = config.get("idle_generated_motion")
     if not isinstance(section, dict):
-        return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, actions)
+        return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, generation)
 
     try:
         min_interval = float(section.get("min_interval_s", default_min_interval_s))
@@ -226,89 +257,69 @@ def load_idle_behavior_config(
         probability = default_probability
     trigger_probability = max(0.0, min(1.0, probability))
 
-    raw_actions = section.get("actions")
-    if not isinstance(raw_actions, list):
-        return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, actions)
+    generation = IdleGenerationConfig(
+        yaw_range_deg=parse_numeric_range(section.get("yaw_range_deg"), -default_yaw_range_deg, default_yaw_range_deg),
+        pitch_range_deg=parse_numeric_range(
+            section.get("pitch_range_deg"), -default_pitch_range_deg, default_pitch_range_deg
+        ),
+        roll_range_deg=parse_numeric_range(section.get("roll_range_deg"), -6.0, 6.0),
+        x_range_m=parse_numeric_range(section.get("x_range_m"), -0.002, 0.002),
+        y_range_m=parse_numeric_range(section.get("y_range_m"), -0.002, 0.002),
+        z_range_m=parse_numeric_range(section.get("z_range_m"), -0.002, 0.003),
+        duration_range_s=parse_numeric_range(
+            section.get("duration_range_s"), max(0.2, default_duration_s * 0.55), max(0.2, default_duration_s * 1.25)
+        ),
+        opposite_direction_bias=parse_probability(section.get("opposite_direction_bias"), 0.68),
+        micro_motion_probability=parse_probability(section.get("micro_motion_probability"), 0.18),
+    )
 
-    parsed_actions: list[dict[str, Any]] = []
-    for idx, action in enumerate(raw_actions):
-        if not isinstance(action, dict):
-            continue
-
-        name = str(action.get("name", f"idle_action_{idx + 1}"))
-        try:
-            weight = float(action.get("weight", 1.0))
-        except (TypeError, ValueError):
-            weight = 1.0
-        if weight <= 0.0:
-            continue
-
-        try:
-            duration_s = max(0.2, float(action.get("duration_s", default_duration_s)))
-        except (TypeError, ValueError):
-            duration_s = default_duration_s
-
-        yaw_min, yaw_max = parse_numeric_range(
-            action.get("yaw_range_deg"), -default_yaw_range_deg, default_yaw_range_deg
-        )
-        pitch_min, pitch_max = parse_numeric_range(
-            action.get("pitch_range_deg"), -default_pitch_range_deg, default_pitch_range_deg
-        )
-        roll_min, roll_max = parse_numeric_range(action.get("roll_range_deg"), 0.0, 0.0)
-        x_min, x_max = parse_numeric_range(action.get("x_range_m"), 0.0, 0.0)
-        y_min, y_max = parse_numeric_range(action.get("y_range_m"), 0.0, 0.0)
-        z_min, z_max = parse_numeric_range(action.get("z_range_m"), 0.0, 0.0)
-
-        parsed_actions.append(
-            {
-                "name": name,
-                "weight": weight,
-                "duration_s": duration_s,
-                "yaw_range_deg": (yaw_min, yaw_max),
-                "pitch_range_deg": (pitch_min, pitch_max),
-                "roll_range_deg": (roll_min, roll_max),
-                "x_range_m": (x_min, x_max),
-                "y_range_m": (y_min, y_max),
-                "z_range_m": (z_min, z_max),
-            }
-        )
-
-    if parsed_actions:
-        actions = parsed_actions
-
-    return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, actions)
+    return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, generation)
 
 
-def pick_idle_random_action(actions: list[dict[str, Any]], fallback_actions: list[dict[str, Any]]) -> dict[str, Any]:
-    """Pick one idle random action from weighted definitions."""
-    action_pool = actions or fallback_actions
-    if not action_pool:
-        return {}
-
-    weights = [max(0.0, float(action.get("weight", 1.0))) for action in action_pool]
-    total_weight = sum(weights)
-    if total_weight <= 0.0:
-        return random.choice(action_pool)
-    return random.choices(action_pool, weights=weights, k=1)[0]
+def _sample_biased_yaw(config: IdleGenerationConfig, last_yaw_rad: float) -> float:
+    yaw_min, yaw_max = config.yaw_range_deg
+    if abs(last_yaw_rad) > math.radians(2.0) and random.random() < config.opposite_direction_bias:
+        if last_yaw_rad > 0.0 and yaw_min < 0.0:
+            yaw_max = min(yaw_max, -2.0)
+        elif last_yaw_rad < 0.0 and yaw_max > 0.0:
+            yaw_min = max(yaw_min, 2.0)
+    return math.radians(random.uniform(float(yaw_min), float(yaw_max)))
 
 
-def build_idle_pending_action(action_config: dict[str, Any], *, default_duration_s: float) -> PendingAction:
-    """Convert one idle action config entry into a `PendingAction`."""
-    yaw_min, yaw_max = action_config.get("yaw_range_deg", (0.0, 0.0))
-    pitch_min, pitch_max = action_config.get("pitch_range_deg", (0.0, 0.0))
-    roll_min, roll_max = action_config.get("roll_range_deg", (0.0, 0.0))
-    x_min, x_max = action_config.get("x_range_m", (0.0, 0.0))
-    y_min, y_max = action_config.get("y_range_m", (0.0, 0.0))
-    z_min, z_max = action_config.get("z_range_m", (0.0, 0.0))
-    duration = float(action_config.get("duration_s", default_duration_s))
+def build_generated_idle_pending_action(config: IdleGenerationConfig, *, last_yaw_rad: float = 0.0) -> PendingAction:
+    """Generate one idle action from ranges at runtime."""
+    pitch_min, pitch_max = config.pitch_range_deg
+    roll_min, roll_max = config.roll_range_deg
+    x_min, x_max = config.x_range_m
+    y_min, y_max = config.y_range_m
+    z_min, z_max = config.z_range_m
+    duration_min, duration_max = config.duration_range_s
+
+    yaw = _sample_biased_yaw(config, last_yaw_rad)
+    pitch = math.radians(random.uniform(float(pitch_min), float(pitch_max)))
+    roll = math.radians(random.uniform(float(roll_min), float(roll_max)))
+    x = random.uniform(float(x_min), float(x_max))
+    y = random.uniform(float(y_min), float(y_max))
+    z = random.uniform(float(z_min), float(z_max))
+
+    if random.random() < config.micro_motion_probability:
+        yaw *= 0.35
+        pitch *= 0.45
+        roll *= 0.45
+        x *= 0.4
+        y *= 0.4
+        z *= 0.4
+
+    if abs(yaw) < math.radians(1.5) and abs(pitch) < math.radians(1.0) and abs(roll) < math.radians(1.0):
+        yaw = math.copysign(math.radians(random.uniform(2.5, 6.0)), yaw or random.choice((-1.0, 1.0)))
 
     return PendingAction(
-        name=f"idle_action:{action_config.get('name', 'random')}",
-        target_yaw=math.radians(random.uniform(float(yaw_min), float(yaw_max))),
-        target_pitch=math.radians(random.uniform(float(pitch_min), float(pitch_max))),
-        target_roll=math.radians(random.uniform(float(roll_min), float(roll_max))),
-        target_x=random.uniform(float(x_min), float(x_max)),
-        target_y=random.uniform(float(y_min), float(y_max)),
-        target_z=random.uniform(float(z_min), float(z_max)),
-        duration=max(0.2, duration),
+        name="idle_generated",
+        target_yaw=yaw,
+        target_pitch=pitch,
+        target_roll=roll,
+        target_x=x,
+        target_y=y,
+        target_z=z,
+        duration=max(0.2, random.uniform(float(duration_min), float(duration_max))),
     )

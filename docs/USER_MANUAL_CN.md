@@ -22,7 +22,6 @@
 - 在端口 6053 启动 ESPHome 卫星服务
 - 加载本地唤醒词模型
 - 通过 mDNS 注册以便 Home Assistant 自动发现
-- 如果网络上有 Sendspin 服务器则自动连接
 
 ### 第三步：连接 Home Assistant
 **自动连接（推荐）：**
@@ -52,7 +51,7 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 
 ### 动作与待机
 - 唤醒、聆听、思考、说话和计时器提醒都有内建动作
-- 支持呼吸待机、天线动作和空闲微动作
+- 支持官方呼吸待机、天线动作和实时生成的空闲微动作
 - 支持手动 Head Yaw 平滑转向并保持角度
 - 手动转向时身体会跟随头部方向
 - 对话结束后会按当前设置回正或保持手动角度
@@ -71,15 +70,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 - 支持唤醒提示音与计时器完成提示音
 - STT/TTS 由 Home Assistant 负责
 
-### Sendspin 多房间音频
-- 通过 mDNS 自动发现 Sendspin 服务器
-- 同步多房间音频播放
-- Reachy Mini 作为 PLAYER 接收音频流
-- 语音对话时自动暂停
-- 无需用户配置
-
----
-
 ## Home Assistant 实体
 
 ### 阶段 1：基础状态
@@ -90,7 +80,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 | Mute | 开关 | 暂停/恢复语音链路 |
 | Speaker Volume | 数值 (0-100%) | 扬声器音量控制 |
 | Idle Behavior | 开关 | 统一空闲行为：头部、天线、微动作 |
-| Sendspin | 开关 | 启用/禁用 Sendspin 发现与播放 |
 
 ### 阶段 2：运行状态
 | 实体 | 类型 | 说明 |
@@ -104,11 +93,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 | Head Roll/Pitch/Yaw | 数值 | ±40° |
 | Body Yaw | 数值 | ±160° |
 | Antenna Left/Right | 数值 | ±90° |
-
-### 阶段 4：注视控制
-| 实体 | 类型 | 说明 |
-|------|------|------|
-| Look At X/Y/Z | 数值 | 注视目标的世界坐标 |
 
 ### 阶段 5：DOA（声源定位）
 | 实体 | 类型 | 说明 |
@@ -145,21 +129,6 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 |------|------|------|
 | Continuous Conversation | 开关 | 多轮对话模式 |
 
-### 阶段 24：系统诊断
-| 实体 | 类型 | 说明 |
-|------|------|------|
-| CPU Percent | 传感器 (%) | CPU 使用率 |
-| CPU Temperature | 传感器 (°C) | CPU 温度 |
-| Memory Percent | 传感器 (%) | 内存使用率 |
-| Memory Used | 传感器 (GB) | 已用内存 |
-| Disk Percent | 传感器 (%) | 磁盘使用率 |
-| Disk Free | 传感器 (GB) | 磁盘可用空间 |
-| Uptime | 传感器 (hours) | 系统运行时间 |
-| Process CPU | 传感器 (%) | 应用 CPU 使用率 |
-| Process Memory | 传感器 (MB) | 应用内存使用 |
-
----
-
 ## 故障排除
 
 | 问题 | 解决方案 |
@@ -181,4 +150,4 @@ ESPHome 端口： 6053
 
 ---
 
-*Reachy Mini 语音助手 v1.0.13*
+*Reachy Mini 语音助手 v1.0.17*

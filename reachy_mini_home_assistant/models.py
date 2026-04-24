@@ -48,9 +48,6 @@ class Preferences:
     continuous_conversation: bool = False
     # Unified idle behavior toggle (controlled from Home Assistant)
     idle_behavior_enabled: bool = False
-    # Sendspin discovery and playback toggle (controlled from Home Assistant)
-    sendspin_enabled: bool = False
-
     def set_idle_behavior_enabled(self, enabled: bool) -> None:
         """Update the unified idle behavior toggle."""
         self.idle_behavior_enabled = enabled

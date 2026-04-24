@@ -195,112 +195,6 @@ def create_entities(server, definitions: list[EntityDefinition]) -> list[Any]:
 # ============================================================================
 
 
-def get_diagnostic_sensor_definitions() -> list[EntityDefinition]:
-    """Get definitions for diagnostic sensor entities."""
-    return [
-        EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name="sys_cpu_percent",
-            name="System CPU Usage",
-            object_id="sys_cpu_percent",
-            icon="mdi:cpu-64-bit",
-            unit_of_measurement="%",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,
-        ),
-        EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name="sys_cpu_temperature",
-            name="CPU Temperature",
-            object_id="sys_cpu_temperature",
-            icon="mdi:thermometer",
-            unit_of_measurement="°C",
-            accuracy_decimals=1,
-            device_class="temperature",
-            state_class="measurement",
-            entity_category=2,
-        ),
-        EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name="sys_memory_percent",
-            name="System Memory Usage",
-            object_id="sys_memory_percent",
-            icon="mdi:memory",
-            unit_of_measurement="%",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,
-        ),
-        EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name="sys_memory_used",
-            name="System Memory Used",
-            object_id="sys_memory_used",
-            icon="mdi:memory",
-            unit_of_measurement="GB",
-            accuracy_decimals=2,
-            state_class="measurement",
-            entity_category=2,
-        ),
-        EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name="sys_disk_percent",
-            name="System Disk Usage",
-            object_id="sys_disk_percent",
-            icon="mdi:harddisk",
-            unit_of_measurement="%",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,
-        ),
-        EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name="sys_disk_free",
-            name="System Disk Free",
-            object_id="sys_disk_free",
-            icon="mdi:harddisk",
-            unit_of_measurement="GB",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,
-        ),
-        EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name="sys_uptime",
-            name="System Uptime",
-            object_id="sys_uptime",
-            icon="mdi:clock-outline",
-            unit_of_measurement="h",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,
-        ),
-        EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name="sys_process_cpu",
-            name="App CPU Usage",
-            object_id="sys_process_cpu",
-            icon="mdi:application-cog",
-            unit_of_measurement="%",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,
-        ),
-        EntityDefinition(
-            entity_type=EntityType.SENSOR,
-            key_name="sys_process_memory",
-            name="App Memory Usage",
-            object_id="sys_process_memory",
-            icon="mdi:application-cog",
-            unit_of_measurement="MB",
-            accuracy_decimals=1,
-            state_class="measurement",
-            entity_category=2,
-        ),
-    ]
-
-
 def get_imu_sensor_definitions() -> list[EntityDefinition]:
     """Get definitions for IMU sensor entities."""
     definitions = []
@@ -351,7 +245,6 @@ def get_imu_sensor_definitions() -> list[EntityDefinition]:
     )
 
     return definitions
-
 
 def get_robot_info_definitions() -> list[EntityDefinition]:
     """Get definitions for robot info entities."""
@@ -503,29 +396,6 @@ def get_pose_control_definitions() -> list[EntityDefinition]:
                 step=1.0,
                 unit_of_measurement="°",
                 mode=2,
-            )
-        )
-
-    return definitions
-
-
-def get_look_at_definitions() -> list[EntityDefinition]:
-    """Get definitions for look-at control entities (Phase 4)."""
-    definitions = []
-
-    for axis in ["x", "y", "z"]:
-        definitions.append(
-            EntityDefinition(
-                entity_type=EntityType.NUMBER,
-                key_name=f"look_at_{axis}",
-                name=f"Look At {axis.upper()}",
-                object_id=f"look_at_{axis}",
-                icon="mdi:crosshairs-gps",
-                min_value=-2.0,
-                max_value=2.0,
-                step=0.1,
-                unit_of_measurement="m",
-                mode=1,  # Box mode for precise input
             )
         )
 

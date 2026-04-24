@@ -49,7 +49,7 @@ from .idle_runtime import (
     update_idle_look_around,
 )
 from .state_machine import (
-    build_idle_pending_action,
+    IdleGenerationConfig,
     load_idle_behavior_config,
     MovementState,
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
@@ -57,7 +57,6 @@ from .state_machine import (
     OFFICIAL_NEUTRAL_ANTENNA_SDK_LEFT_RAD,
     OFFICIAL_NEUTRAL_ANTENNA_SDK_RIGHT_RAD,
     PendingAction,
-    pick_idle_random_action,
     RobotState,
 )
 
@@ -117,42 +116,6 @@ DEFAULT_IDLE_REST_POSE = {
 }
 
 _ANIMATION_CONFIG_FILE = Path(__file__).resolve().parent.parent / "animations" / "conversation_animations.json"
-_DEFAULT_IDLE_RANDOM_ACTIONS: list[dict[str, Any]] = [
-    {
-        "name": "curious_left",
-        "weight": 1.0,
-        "duration_s": 1.8,
-        "yaw_range_deg": [-16.0, -6.0],
-        "pitch_range_deg": [-3.0, 4.0],
-        "roll_range_deg": [-4.0, 2.0],
-    },
-    {
-        "name": "curious_right",
-        "weight": 1.0,
-        "duration_s": 1.8,
-        "yaw_range_deg": [6.0, 16.0],
-        "pitch_range_deg": [-3.0, 4.0],
-        "roll_range_deg": [-2.0, 4.0],
-    },
-    {
-        "name": "micro_nod",
-        "weight": 0.9,
-        "duration_s": 1.3,
-        "yaw_range_deg": [-3.0, 3.0],
-        "pitch_range_deg": [-10.0, -4.0],
-        "roll_range_deg": [-2.0, 2.0],
-    },
-    {
-        "name": "micro_tilt",
-        "weight": 0.8,
-        "duration_s": 1.6,
-        "yaw_range_deg": [-6.0, 6.0],
-        "pitch_range_deg": [-2.0, 4.0],
-        "roll_range_deg": [-7.0, 7.0],
-    },
-]
-
-
 class MovementManager:
     """
     Unified movement manager with configurable control loop.
@@ -245,16 +208,27 @@ class MovementManager:
         self._idle_motion_enabled = False
         # Idle antenna animation toggle (exposed via ESPHome switch)
         self._idle_antenna_enabled = False
-        # Idle random actions toggle (pure movement, no audio)
-        self._idle_random_actions_enabled = False
+        # Idle generated motion toggle (pure movement, no audio)
+        self._idle_generated_motion_enabled = False
         self._idle_rest_head_pitch_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["pitch_deg"]))
         self._idle_rest_antenna_left_rad = float(DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
         self._idle_rest_antenna_right_rad = float(DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
-        self._idle_random_actions_probability = IDLE_LOOK_AROUND_PROBABILITY
-        self._idle_random_actions_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
-        self._idle_random_actions_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
-        self._idle_random_actions: list[dict[str, Any]] = []
-        self._load_idle_random_actions_config()
+        self._idle_generated_trigger_probability = IDLE_LOOK_AROUND_PROBABILITY
+        self._idle_generated_min_interval = IDLE_LOOK_AROUND_MIN_INTERVAL
+        self._idle_generated_max_interval = IDLE_LOOK_AROUND_MAX_INTERVAL
+        self._idle_generation_config = IdleGenerationConfig(
+            yaw_range_deg=(-IDLE_LOOK_AROUND_YAW_RANGE, IDLE_LOOK_AROUND_YAW_RANGE),
+            pitch_range_deg=(-IDLE_LOOK_AROUND_PITCH_RANGE, IDLE_LOOK_AROUND_PITCH_RANGE),
+            roll_range_deg=(-6.0, 6.0),
+            x_range_m=(-0.002, 0.002),
+            y_range_m=(-0.002, 0.002),
+            z_range_m=(-0.002, 0.003),
+            duration_range_s=(1.1, 2.5),
+            opposite_direction_bias=0.68,
+            micro_motion_probability=0.18,
+        )
+        self._last_idle_generated_yaw = 0.0
+        self._load_idle_generated_motion_config()
 
         # Antenna controller (handles freeze/unfreeze for listening mode)
         self._antenna_controller = AntennaController(time_func=self._now)
@@ -548,7 +522,7 @@ class MovementManager:
 
     def _idle_behavior_enabled(self) -> bool:
         """Whether any idle behavior subsystem is currently enabled."""
-        return self._idle_motion_enabled or self._idle_antenna_enabled or self._idle_random_actions_enabled
+        return self._idle_motion_enabled or self._idle_antenna_enabled or self._idle_generated_motion_enabled
 
     def _apply_idle_behavior_enabled(self, enabled: bool) -> None:
         apply_idle_behavior_enabled(self, enabled)
@@ -661,12 +635,11 @@ class MovementManager:
     def _schedule_next_idle_action_time(self, now: float) -> None:
         schedule_next_idle_action_time(self, now)
 
-    def _load_idle_random_actions_config(self) -> None:
-        """Load idle random action definitions from animation config."""
+    def _load_idle_generated_motion_config(self) -> None:
+        """Load realtime idle generation ranges from animation config."""
         config = load_idle_behavior_config(
             config_path=_ANIMATION_CONFIG_FILE,
             default_rest_pose=DEFAULT_IDLE_REST_POSE,
-            default_actions=_DEFAULT_IDLE_RANDOM_ACTIONS,
             default_min_interval_s=IDLE_LOOK_AROUND_MIN_INTERVAL,
             default_max_interval_s=IDLE_LOOK_AROUND_MAX_INTERVAL,
             default_probability=IDLE_LOOK_AROUND_PROBABILITY,
@@ -675,17 +648,13 @@ class MovementManager:
             default_duration_s=IDLE_LOOK_AROUND_DURATION,
         )
 
-        self._idle_random_actions = config.actions
+        self._idle_generation_config = config.generation
         self._idle_rest_head_pitch_rad = config.rest_pose.pitch_rad
         self._idle_rest_antenna_left_rad = config.rest_pose.antenna_left_rad
         self._idle_rest_antenna_right_rad = config.rest_pose.antenna_right_rad
-        self._idle_random_actions_min_interval = config.min_interval_s
-        self._idle_random_actions_max_interval = config.max_interval_s
-        self._idle_random_actions_probability = config.trigger_probability
-
-    def _pick_idle_random_action(self) -> dict[str, Any]:
-        """Pick one idle random action from weighted definitions."""
-        return pick_idle_random_action(self._idle_random_actions, _DEFAULT_IDLE_RANDOM_ACTIONS)
+        self._idle_generated_min_interval = config.min_interval_s
+        self._idle_generated_max_interval = config.max_interval_s
+        self._idle_generated_trigger_probability = config.trigger_probability
 
     def _poll_commands(self) -> None:
         poll_commands(self)

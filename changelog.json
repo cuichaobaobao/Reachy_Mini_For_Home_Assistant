@@ -1,5 +1,19 @@
 [
   {
+    "version": "1.0.17",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.17",
+      "Change: Replace preset idle action templates with realtime generated idle micro-motions",
+      "Change: Align idle breathing exactly with official Reachy Mini conversation app breathing parameters",
+      "Change: Use audio-driven SpeechSwayRT as the visible TTS speaking motion path",
+      "Fix: Debounce brief Home Assistant disconnects before suspending wake/STT/TTS services",
+      "Fix: Report Backend Ready from daemon backend_status.ready instead of daemon running state",
+      "Remove: Delete Sendspin discovery/playback, switch, dependency, and buffering code",
+      "Remove: Delete unused blueprint, health/memory monitors, system diagnostics entities, and disabled look-at controls"
+    ]
+  },
+  {
     "version": "1.0.16",
     "date": "2026-04-24",
     "changes": [

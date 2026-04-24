@@ -115,7 +115,8 @@ class ReachyMiniMotion:
         """Called when TTS starts - start speech-reactive motion.
 
         Non-blocking: command sent to MovementManager.
-        Animation is defined in conversation_animations.json.
+        The state is still exposed to the motion state machine, while the
+        visible speaking motion is driven by SpeechSwayRT from TTS audio.
         """
         if self._movement_manager is None:
             _LOGGER.warning("MovementManager not initialized, skipping speaking animation")
@@ -134,6 +135,7 @@ class ReachyMiniMotion:
             return
 
         self._is_speaking = False
+        self._movement_manager.set_speech_sway(0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
         # Don't change state yet - let on_idle handle that
         _LOGGER.debug("Reachy Mini: Speaking ended")
 

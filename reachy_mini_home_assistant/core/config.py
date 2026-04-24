@@ -136,7 +136,6 @@ class ShutdownConfig:
 
     audio_thread_join_timeout: float = 1.0  # seconds
     server_close_timeout: float = 3.0  # seconds
-    sendspin_stop_timeout: float = 3.0  # seconds
 
 
 @dataclass

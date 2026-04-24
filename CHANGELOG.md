@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.17] - 2026-04-24
+
+### Changed
+- Replace preset idle action templates with realtime generated idle micro-motions so each idle action samples fresh yaw, pitch, roll, position, and duration parameters.
+- Align idle breathing exactly with the official Reachy Mini conversation app parameters: 0.005m Z amplitude, 0.1Hz breathing, 15 degree antenna sway, and 0.5Hz antenna sway.
+- Make the speaking animation a state marker only so visible TTS motion comes from the official-style audio-driven `SpeechSwayRT` path.
+- Debounce Home Assistant disconnect handling so brief ESPHome connection drops do not immediately suspend wake/STT/TTS services.
+- Report `Backend Ready` from the real daemon `backend_status.ready` flag instead of treating daemon `running` as backend readiness.
+
+### Removed
+- Remove Sendspin discovery/playback, the Sendspin Home Assistant switch, the `aiosendspin` dependency, and related playback buffering.
+- Remove the unused blueprint, local health/memory monitors, system diagnostics entities, and disabled look-at controls.
+
 ## [1.0.16] - 2026-04-24
 
 ### Changed

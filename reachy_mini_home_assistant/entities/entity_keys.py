@@ -20,7 +20,6 @@ ENTITY_KEYS: dict[str, int] = {
     "mute": 102,
     "speaker_volume": 103,
     "idle_behavior_enabled": 104,
-    "sendspin_enabled": 105,
     # Phase 2: Runtime controls (200-299)
     "motor_mode": 201,
     # Phase 3: Pose control (300-399)
@@ -33,10 +32,6 @@ ENTITY_KEYS: dict[str, int] = {
     "body_yaw": 306,
     "antenna_left": 307,
     "antenna_right": 308,
-    # Phase 4: Look at control (400-499)
-    "look_at_x": 400,
-    "look_at_y": 401,
-    "look_at_z": 402,
     # Phase 5: DOA - Direction of Arrival (500-599)
     "doa_angle": 500,
     "speech_detected": 501,
@@ -60,16 +55,6 @@ ENTITY_KEYS: dict[str, int] = {
     "emotion": 800,
     # Phase 21: Continuous conversation (1500-1599)
     "continuous_conversation": 1500,
-    # Phase 24: System diagnostics (1800-1899)
-    "sys_cpu_percent": 1800,
-    "sys_cpu_temperature": 1801,
-    "sys_memory_percent": 1802,
-    "sys_memory_used": 1803,
-    "sys_disk_percent": 1804,
-    "sys_disk_free": 1805,
-    "sys_uptime": 1806,
-    "sys_process_cpu": 1807,
-    "sys_process_memory": 1808,
     # Phase 25: Runtime service state (1900-1999)
     "services_suspended": 1901,
     # Phase 26: DOA tracking control (2000+)

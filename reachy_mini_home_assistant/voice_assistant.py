@@ -102,6 +102,8 @@ class VoiceAssistantService:
         # Home Assistant connection state
         self._ha_connected = False  # Track whether HA is connected
         self._ha_connection_established = False  # Track if HA connection was ever established
+        self._ha_disconnect_handle: asyncio.TimerHandle | None = None
+        self._ha_disconnect_debounce_s = 3.0
 
     async def start(self) -> None:
         """Start the voice assistant service."""
@@ -238,41 +240,7 @@ class VoiceAssistantService:
         # Store service event loop for cross-thread async toggles
         self._event_loop = asyncio.get_running_loop()
 
-        # Start Sendspin discovery only when enabled in preferences (default OFF)
-        if preferences.sendspin_enabled:
-            await music_player.start_sendspin_discovery()
-            _LOGGER.info("Sendspin discovery enabled from preferences")
-        else:
-            _LOGGER.info("Sendspin discovery disabled by default")
-
         _LOGGER.info("Voice assistant service started on %s:%s", self.host, self.port)
-
-    def set_sendspin_enabled(self, enabled: bool) -> None:
-        """Enable or disable Sendspin discovery and connection at runtime."""
-        if self._state is None or self._state.music_player is None:
-            return
-
-        if self._state.preferences.sendspin_enabled != enabled:
-            self._state.preferences.sendspin_enabled = enabled
-            self._state.save_preferences()
-
-        async def _apply() -> None:
-            if self._state is None or self._state.music_player is None:
-                return
-            if enabled:
-                await self._state.music_player.start_sendspin_discovery()
-            else:
-                await self._state.music_player.stop_sendspin()
-
-        try:
-            loop = self._event_loop
-            if loop is not None and loop.is_running():
-                asyncio.run_coroutine_threadsafe(_apply(), loop)
-            else:
-                task = asyncio.create_task(_apply())
-                task.add_done_callback(lambda _task: None)
-        except Exception as e:
-            _LOGGER.warning("Failed to apply Sendspin toggle (%s): %s", enabled, e)
 
     def _probe_audio_capture_ready(self, media, timeout_s: float = 1.5) -> bool:
         """Check whether microphone samples become available shortly after startup."""
@@ -434,6 +402,7 @@ class VoiceAssistantService:
     async def _on_ha_connected(self) -> None:
         """Called when Home Assistant connects."""
         _LOGGER.info("Home Assistant connected - initializing voice services")
+        self._cancel_ha_disconnect_timer()
         self._ha_connected = True
         self._ha_connection_established = True
 
@@ -441,16 +410,37 @@ class VoiceAssistantService:
         if self._state.services_suspended:
             self._resume_non_esphome_services(reason="ha_connected")
 
+    def _cancel_ha_disconnect_timer(self) -> None:
+        if self._ha_disconnect_handle is not None:
+            self._ha_disconnect_handle.cancel()
+            self._ha_disconnect_handle = None
+
+    def _apply_ha_disconnect_suspend(self) -> None:
+        self._ha_disconnect_handle = None
+        if self._ha_connected:
+            return
+        _LOGGER.warning("Home Assistant still disconnected after debounce - suspending voice services")
+        self._suspend_non_esphome_services(reason="ha_disconnected")
+
     def _on_ha_disconnected(self) -> None:
         """Called when Home Assistant disconnects."""
-        _LOGGER.warning("Home Assistant disconnected - suspending voice services")
+        _LOGGER.warning(
+            "Home Assistant disconnected - waiting %.1fs before suspending voice services",
+            self._ha_disconnect_debounce_s,
+        )
         self._ha_connected = False
 
-        self._suspend_non_esphome_services(reason="ha_disconnected")
+        self._cancel_ha_disconnect_timer()
+        loop = self._event_loop
+        if loop is not None and loop.is_running():
+            self._ha_disconnect_handle = loop.call_later(self._ha_disconnect_debounce_s, self._apply_ha_disconnect_suspend)
+        else:
+            self._apply_ha_disconnect_suspend()
 
     async def stop(self) -> None:
         """Stop the voice assistant service."""
         _LOGGER.info("Stopping voice assistant service...")
+        self._cancel_ha_disconnect_timer()
 
         # 1. First stop audio recording to prevent new data from coming in
         try:
@@ -497,16 +487,6 @@ class VoiceAssistantService:
                 )
             except TimeoutError:
                 _LOGGER.warning("mDNS unregister did not finish in time")
-
-        # 6.5. Stop Sendspin
-        if self._state and self._state.music_player:
-            try:
-                await asyncio.wait_for(
-                    self._state.music_player.stop_sendspin(),
-                    timeout=Config.shutdown.sendspin_stop_timeout,
-                )
-            except TimeoutError:
-                _LOGGER.warning("Sendspin stop did not finish in time")
 
         # 7. Close SDK media resources to prevent memory leaks
         try:

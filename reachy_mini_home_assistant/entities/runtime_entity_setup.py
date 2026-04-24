@@ -96,19 +96,6 @@ def setup_runtime_entities(registry: "EntityRegistry", entities: list) -> None:
         )
     )
 
-    def sync_sendspin() -> None:
-        registry.server._voice_assistant_service.set_sendspin_enabled(registry._get_pref_bool("sendspin_enabled"))
-
-    entities.append(
-        registry._make_stored_switch(
-            key_name="sendspin_enabled",
-            name="Sendspin",
-            object_id="sendspin_enabled",
-            icon="mdi:speaker-wireless",
-            pref_key="sendspin_enabled",
-            after_set=sync_sendspin,
-        )
-    )
     _LOGGER.debug("Phase 1 entities registered")
 
 

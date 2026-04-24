@@ -117,13 +117,11 @@ def play_tts(protocol: "VoiceSatelliteProtocol") -> None:
 def duck(protocol: "VoiceSatelliteProtocol") -> None:
     _LOGGER.debug("Ducking music")
     protocol.state.music_player.duck()
-    protocol.state.music_player.pause_sendspin()
 
 
 def unduck(protocol: "VoiceSatelliteProtocol") -> None:
     _LOGGER.debug("Unducking music")
     protocol.state.music_player.unduck()
-    protocol.state.music_player.resume_sendspin()
 
 
 def play_timer_finished(protocol: "VoiceSatelliteProtocol") -> None:

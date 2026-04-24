@@ -23,7 +23,7 @@ _REQUIRED_TOP_LEVEL_TYPES: dict[str, type] = {
 _OPTIONAL_TOP_LEVEL_TYPES: dict[str, type] = {
     "ha_event_behaviors": dict,
     "emotion_keywords": dict,
-    "idle_random_actions": dict,
+    "idle_generated_motion": dict,
     "idle_rest_pose": dict,
 }
 
@@ -54,7 +54,7 @@ def load_animation_config(config_path: Path) -> dict[str, Any]:
 
     _validate_ha_event_behaviors(data.get("ha_event_behaviors"))
     _validate_emotion_keywords(data.get("emotion_keywords"))
-    _validate_idle_random_actions(data.get("idle_random_actions"))
+    _validate_idle_generated_motion(data.get("idle_generated_motion"))
 
     return data
 
@@ -92,9 +92,10 @@ def _validate_emotion_keywords(section: Any) -> None:
         raise AnimationConfigError("emotion_keywords.settings must be a dict")
 
 
-def _validate_idle_random_actions(section: Any) -> None:
+def _validate_idle_generated_motion(section: Any) -> None:
     if section is None:
         return
-    actions = section.get("actions", [])
-    if not isinstance(actions, list):
-        raise AnimationConfigError("idle_random_actions.actions must be a list")
+    for key in ("yaw_range_deg", "pitch_range_deg", "roll_range_deg", "duration_range_s"):
+        value = section.get(key)
+        if value is not None and (not isinstance(value, list) or len(value) < 2):
+            raise AnimationConfigError(f"idle_generated_motion.{key} must be a two-value list")

@@ -26,7 +26,7 @@ class AnimationConfigTests(unittest.TestCase):
                         "settings": {},
                         "ha_event_behaviors": {"settings": {}, "mappings": {}},
                         "emotion_keywords": {"settings": {}, "keywords": {}},
-                        "idle_random_actions": {"actions": []},
+                        "idle_generated_motion": {"yaw_range_deg": [-10, 10], "duration_range_s": [1, 2]},
                     }
                 ),
                 encoding="utf-8",

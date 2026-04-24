@@ -1,18 +1,15 @@
-"""Entity setup helpers for sensors, diagnostics, and motion control entities."""
+"""Entity setup helpers for robot sensors and motion control entities."""
 
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
 
-from ..core.system_diagnostics import get_system_diagnostics
 from .entity import BinarySensorEntity
 from .entity_extensions import SensorEntity, SwitchEntity
 from .entity_factory import (
     create_entity,
-    get_diagnostic_sensor_definitions,
     get_imu_sensor_definitions,
-    get_look_at_definitions,
     get_pose_control_definitions,
     get_robot_info_definitions,
 )
@@ -51,16 +48,6 @@ def setup_motion_entities(registry: "EntityRegistry", entities: list) -> None:
             "body_yaw": (rc.get_body_yaw, rc.set_body_yaw),
             "antenna_left": (rc.get_antenna_left, rc.set_antenna_left),
             "antenna_right": (rc.get_antenna_right, rc.set_antenna_right),
-        },
-    )
-    append_defined_entities(
-        registry,
-        entities,
-        get_look_at_definitions(),
-        {
-            "look_at_x": (rc.get_look_at_x, rc.set_look_at_x),
-            "look_at_y": (rc.get_look_at_y, rc.set_look_at_y),
-            "look_at_z": (rc.get_look_at_z, rc.set_look_at_z),
         },
     )
     _LOGGER.debug("Motion entities registered")
@@ -137,25 +124,5 @@ def setup_imu_entities(registry: "EntityRegistry", entities: list) -> None:
             "imu_gyro_y": rc.get_imu_gyro_y,
             "imu_gyro_z": rc.get_imu_gyro_z,
             "imu_temperature": rc.get_imu_temperature,
-        },
-    )
-
-
-def setup_diagnostic_entities(registry: "EntityRegistry", entities: list) -> None:
-    diag = get_system_diagnostics()
-    append_defined_entities(
-        registry,
-        entities,
-        get_diagnostic_sensor_definitions(),
-        {
-            "sys_cpu_percent": diag.get_cpu_percent,
-            "sys_cpu_temperature": diag.get_cpu_temperature,
-            "sys_memory_percent": diag.get_memory_percent,
-            "sys_memory_used": diag.get_memory_used_gb,
-            "sys_disk_percent": diag.get_disk_percent,
-            "sys_disk_free": diag.get_disk_free_gb,
-            "sys_uptime": diag.get_uptime_hours,
-            "sys_process_cpu": diag.get_process_cpu_percent,
-            "sys_process_memory": diag.get_process_memory_mb,
         },
     )

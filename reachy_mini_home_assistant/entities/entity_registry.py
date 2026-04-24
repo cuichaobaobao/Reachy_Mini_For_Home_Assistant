@@ -20,7 +20,6 @@ from .runtime_entity_setup import (
 from .sensor_entity_setup import (
     append_defined_entities,
     setup_audio_direction_entities,
-    setup_diagnostic_entities,
     setup_imu_entities,
     setup_motion_entities,
     setup_robot_info_entities,
@@ -230,12 +229,9 @@ class EntityRegistry:
         self._setup_phase9_entities(entities)
         # Phase 11 (LED control) disabled - LEDs are inside the robot and not visible
         self._setup_phase12_entities(entities)
-        # Phase 13 (Sendspin) - auto-enabled via mDNS discovery, no user entities
         # Phase 14 (head_joints, passive_joints) removed - not needed
         # Phase 20 (Tap detection) disabled - too many false triggers
         self._setup_phase21_entities(entities)
-        # Removed runtime phases are intentionally skipped.
-        self._setup_phase24_entities(entities)  # System diagnostics
 
         _LOGGER.info("All entities registered: %d total", len(entities))
 
@@ -295,6 +291,3 @@ class EntityRegistry:
         """
         # DOA entities are read-only sensors, no special references needed
         pass
-
-    def _setup_phase24_entities(self, entities: list) -> None:
-        setup_diagnostic_entities(self, entities)

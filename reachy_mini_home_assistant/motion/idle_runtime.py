@@ -12,7 +12,7 @@ from .state_machine import (
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
     PendingAction,
     RobotState,
-    build_idle_pending_action,
+    build_generated_idle_pending_action,
 )
 
 if TYPE_CHECKING:
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 def apply_idle_behavior_enabled(manager: "MovementManager", enabled: bool) -> None:
     manager._idle_motion_enabled = enabled
     manager._idle_antenna_enabled = enabled
-    manager._idle_random_actions_enabled = enabled
+    manager._idle_generated_motion_enabled = enabled
 
     if not enabled:
         clear_idle_activity(manager)
@@ -69,7 +69,8 @@ def clear_idle_activity(manager: "MovementManager") -> None:
     manager.state.next_look_around_time = 0.0
     manager.state.look_around_in_progress = False
     manager._idle_action_queue.clear()
-    if manager._pending_action and manager._pending_action.name.startswith("idle_action"):
+    manager._last_idle_generated_yaw = 0.0
+    if manager._pending_action and manager._pending_action.name.startswith(("idle_action", "idle_generated")):
         manager._pending_action = None
 
 
@@ -86,7 +87,7 @@ def clear_idle_animation(manager: "MovementManager") -> None:
 
 
 def schedule_next_idle_action_time(manager: "MovementManager", now: float) -> None:
-    interval = random.uniform(manager._idle_random_actions_min_interval, manager._idle_random_actions_max_interval)
+    interval = random.uniform(manager._idle_generated_min_interval, manager._idle_generated_max_interval)
     manager.state.next_look_around_time = now + interval
 
 
@@ -99,7 +100,7 @@ def update_idle_look_around(
     pitch_range_deg: float,
     duration_s: float,
 ) -> None:
-    if not manager._idle_motion_enabled and not manager._idle_random_actions_enabled:
+    if not manager._idle_motion_enabled and not manager._idle_generated_motion_enabled:
         manager.state.next_look_around_time = 0.0
         manager.state.look_around_in_progress = False
         return
@@ -129,13 +130,16 @@ def update_idle_look_around(
     if now < manager.state.next_look_around_time or manager.state.look_around_in_progress:
         return
 
-    if manager._idle_random_actions_enabled:
-        if random.random() > manager._idle_random_actions_probability:
+    if manager._idle_generated_motion_enabled:
+        if random.random() > manager._idle_generated_trigger_probability:
             schedule_next_idle_action_time(manager, now)
             return
 
-        action_config = manager._pick_idle_random_action()
-        idle_action = build_idle_pending_action(action_config, default_duration_s=duration_s)
+        idle_action = build_generated_idle_pending_action(
+            manager._idle_generation_config,
+            last_yaw_rad=manager._last_idle_generated_yaw,
+        )
+        manager._last_idle_generated_yaw = idle_action.target_yaw
         manager._idle_action_queue.append(idle_action)
         manager.state.look_around_in_progress = True
         queued_duration = sum(max(0.0, float(item.duration)) for item in manager._idle_action_queue)

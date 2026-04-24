@@ -47,10 +47,6 @@ class ReachyController:
         self._state_cache: dict[str, Any] = {}
         self._last_status_query = 0.0
 
-        self._look_at_x = 0.0
-        self._look_at_y = 0.0
-        self._look_at_z = 0.0
-
     def set_movement_manager(self, movement_manager) -> None:
         """Set the MovementManager instance for pose control.
 
@@ -141,11 +137,11 @@ class ReachyController:
         return str(self._status_value(status, "state", "unknown"))
 
     def get_backend_ready(self) -> bool:
-        """Check if backend is ready with caching."""
+        """Check the daemon's real backend readiness flag."""
         status = self._get_cached_status()
         if status is None:
             return False
-        return self._status_value(status, "state") == "running"
+        return bool(self._nested_status_value(status, "backend_status", "ready", False))
 
     def get_error_message(self) -> str:
         """Get current error message with caching."""
@@ -532,52 +528,6 @@ class ReachyController:
         """Set right antenna angle in degrees via MovementManager."""
         if not self._set_pose_via_manager(antenna_right=math.radians(angle_deg)):
             self._disabled_pose_setter("antenna_right")
-
-    # ========== Phase 4: Look At Control ==========
-
-    def get_look_at_x(self) -> float:
-        """Get look at target X coordinate in world frame (meters)."""
-        return self._look_at_x
-
-    def set_look_at_x(self, x: float) -> None:
-        """Set look at target X coordinate."""
-        self._look_at_x = x
-        self._update_look_at()
-
-    def get_look_at_y(self) -> float:
-        """Get look at target Y coordinate in world frame (meters)."""
-        return self._look_at_y
-
-    def set_look_at_y(self, y: float) -> None:
-        """Set look at target Y coordinate."""
-        self._look_at_y = y
-        self._update_look_at()
-
-    def get_look_at_z(self) -> float:
-        """Get look at target Z coordinate in world frame (meters)."""
-        return self._look_at_z
-
-    def set_look_at_z(self, z: float) -> None:
-        """Set look at target Z coordinate."""
-        self._look_at_z = z
-        self._update_look_at()
-
-    def _update_look_at(self) -> None:
-        """Update robot to look at the target coordinates.
-
-        NOTE: Disabled to prevent conflict with MovementManager's control loop.
-        """
-        logger.warning("_update_look_at is disabled - MovementManager controls head pose")
-        # if not self.is_available:
-        #     return
-        # try:
-        #     x = getattr(self, '_look_at_x', 0.0)
-        #     y = getattr(self, '_look_at_y', 0.0)
-        #     z = getattr(self, '_look_at_z', 0.0)
-        #     self.reachy.look_at_world(x, y, z)
-        #     logger.info(f"Looking at world coordinates: ({x}, {y}, {z})")
-        # except Exception as e:
-        #     logger.error(f"Error updating look at: {e}")
 
     # ========== Phase 6: Diagnostic Information ==========
 
