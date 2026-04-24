@@ -52,6 +52,10 @@ from .state_machine import (
     build_idle_pending_action,
     load_idle_behavior_config,
     MovementState,
+    OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+    OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
+    OFFICIAL_NEUTRAL_ANTENNA_SDK_LEFT_RAD,
+    OFFICIAL_NEUTRAL_ANTENNA_SDK_RIGHT_RAD,
     PendingAction,
     pick_idle_random_action,
     RobotState,
@@ -108,8 +112,8 @@ IDLE_INACTIVITY_THRESHOLD = 6.0  # Seconds of inactivity before look-around star
 IDLE_LOOK_AROUND_PROBABILITY = 0.8  # Otherwise keep breathing-only cycle
 DEFAULT_IDLE_REST_POSE = {
     "pitch_deg": 0.0,
-    "antenna_left_rad": 0.0,
-    "antenna_right_rad": 0.0,
+    "antenna_left_rad": OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+    "antenna_right_rad": OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
 }
 
 _ANIMATION_CONFIG_FILE = Path(__file__).resolve().parent.parent / "animations" / "conversation_animations.json"
@@ -478,8 +482,8 @@ class MovementManager:
             target_x=0.0,
             target_y=0.0,
             target_z=0.0,
-            target_antenna_left=0.0,
-            target_antenna_right=0.0,
+            target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+            target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
             duration=duration,
         )
         self._enqueue_command("action", action, "neutral", timeout=0)
@@ -997,7 +1001,10 @@ class MovementManager:
             neutral_pose = np.eye(4)
             self.robot.goto_target(
                 head=neutral_pose,
-                antennas=[0.0, 0.0],
+                antennas=[
+                    OFFICIAL_NEUTRAL_ANTENNA_SDK_LEFT_RAD,
+                    OFFICIAL_NEUTRAL_ANTENNA_SDK_RIGHT_RAD,
+                ],
                 body_yaw=0.0,
                 duration=0.3,  # Faster reset
             )

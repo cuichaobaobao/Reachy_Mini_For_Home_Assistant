@@ -8,7 +8,13 @@ from queue import Empty
 from typing import TYPE_CHECKING, Any
 
 from .emotion_moves import EmotionMove, is_emotion_available
-from .state_machine import STATE_ANIMATION_MAP, PendingAction, RobotState
+from .state_machine import (
+    OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+    OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
+    STATE_ANIMATION_MAP,
+    PendingAction,
+    RobotState,
+)
 
 if TYPE_CHECKING:
     from .movement_manager import MovementManager
@@ -80,8 +86,8 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
                         target_roll=0.0,
                         target_pitch=0.0,
                         target_yaw=manager.state.target_yaw,
-                        target_antenna_left=0.0,
-                        target_antenna_right=0.0,
+                        target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+                        target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
                         duration=0.7,
                     )
                     start_action(manager, action)

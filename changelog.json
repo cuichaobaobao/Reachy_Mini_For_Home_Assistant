@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.16",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.16",
+      "Change: Align all idle, neutral, wake-from-rest, and motion-fallback antenna neutral paths to the official Reachy Mini conversation app's ~+/-10 degree baseline",
+      "Change: Raise the package Python baseline to 3.12 so project metadata matches the runtime requirement already imposed by aiosendspin"
+    ]
+  },
+  {
     "version": "1.0.15",
     "date": "2026-04-23",
     "changes": [

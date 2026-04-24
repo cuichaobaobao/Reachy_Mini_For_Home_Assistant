@@ -7,7 +7,13 @@ import math
 import random
 from typing import TYPE_CHECKING
 
-from .state_machine import PendingAction, RobotState, build_idle_pending_action
+from .state_machine import (
+    OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+    OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
+    PendingAction,
+    RobotState,
+    build_idle_pending_action,
+)
 
 if TYPE_CHECKING:
     from .movement_manager import MovementManager
@@ -32,8 +38,8 @@ def apply_idle_behavior_enabled(manager: "MovementManager", enabled: bool) -> No
     elif manager.state.robot_state == RobotState.IDLE:
         manager._animation_player.set_animation("idle")
         manager.state.target_pitch = 0.0
-        manager.state.target_antenna_left = 0.0
-        manager.state.target_antenna_right = 0.0
+        manager.state.target_antenna_left = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD
+        manager.state.target_antenna_right = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD
 
     logger.info("Idle behavior %s", "enabled" if enabled else "disabled")
 

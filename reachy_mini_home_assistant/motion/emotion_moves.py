@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from .state_machine import OFFICIAL_NEUTRAL_ANTENNA_SDK_LEFT_RAD, OFFICIAL_NEUTRAL_ANTENNA_SDK_RIGHT_RAD
+
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
@@ -128,4 +130,11 @@ class EmotionMove:
             except Exception:
                 neutral_head_pose = np.eye(4, dtype=np.float64)
 
-            return (neutral_head_pose, np.array([0.0, 0.0], dtype=np.float64), 0.0)
+            return (
+                neutral_head_pose,
+                np.array(
+                    [OFFICIAL_NEUTRAL_ANTENNA_SDK_LEFT_RAD, OFFICIAL_NEUTRAL_ANTENNA_SDK_RIGHT_RAD],
+                    dtype=np.float64,
+                ),
+                0.0,
+            )

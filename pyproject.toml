@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "reachy_mini_home_assistant_custom"
-version = "1.0.15"
+version = "1.0.16"
 description = "Deep integration of Reachy Mini robot with Home Assistant"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = {text = "Apache-2.0"}
 dependencies = [
     # Reachy Mini SDK
@@ -76,7 +76,7 @@ dev = [
 
 [tool.uv]
 dependency-metadata = [
-    { name = "gstreamer-libs", version = "1.28.1", requires-dist = ["gstreamer-msvc-runtime; sys_platform == 'win32'", "setuptools"] },
+    { name = "gstreamer-libs", version = "1.28.2", requires-dist = ["gstreamer-msvc-runtime; sys_platform == 'win32'", "setuptools"] },
 ]
 
 [tool.ruff.lint]

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.16] - 2026-04-24
+
+### Changed
+- Align all idle, neutral, wake-from-rest, and motion-fallback antenna neutral paths to the official Reachy Mini conversation app's ~+/-10 degree baseline so antennas return to a consistent calmer center instead of mixing 0 degree and offset neutral states.
+- Raise the package Python baseline to 3.12 so project metadata matches the runtime requirement already imposed by `aiosendspin`.
+
 ## [1.0.15] - 2026-04-23
 
 ### Changed

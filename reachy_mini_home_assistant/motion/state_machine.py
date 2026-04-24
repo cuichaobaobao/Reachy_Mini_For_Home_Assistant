@@ -18,6 +18,11 @@ from ..animations.animation_config import load_animation_config
 
 logger = logging.getLogger(__name__)
 
+OFFICIAL_NEUTRAL_ANTENNA_SDK_LEFT_RAD = -0.1745
+OFFICIAL_NEUTRAL_ANTENNA_SDK_RIGHT_RAD = 0.1745
+OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD = 0.1745
+OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD = -0.1745
+
 
 class RobotState(Enum):
     """Robot state machine states."""
