@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.20",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.20",
+      "Change: Drive quiet idle breathing through an official BreathingMove-equivalent path instead of JSON offset layering",
+      "Change: Match official idle breathing interpolation, head Z sine, antenna sway formula, antenna order, and body yaw output"
+    ]
+  },
+  {
     "version": "1.0.19",
     "date": "2026-04-24",
     "changes": [

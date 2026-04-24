@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.20] - 2026-04-24
+
+### Changed
+- Drive quiet idle breathing through an official `BreathingMove`-equivalent path instead of JSON offset layering.
+- Match the official idle breathing interpolation, head Z sine, antenna sway formula, antenna order, and body yaw output for the breathing state.
+
 ## [1.0.19] - 2026-04-24
 
 ### Changed
