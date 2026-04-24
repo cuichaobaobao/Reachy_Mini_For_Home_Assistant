@@ -25,24 +25,6 @@ _PACKAGE_DIR = _MODULE_DIR.parent  # reachy_mini_home_assistant/
 _ANIMATIONS_FILE = _PACKAGE_DIR / "animations" / "conversation_animations.json"
 
 
-def _smoothstep(value: float) -> float:
-    clamped = max(0.0, min(1.0, value))
-    return clamped * clamped * (3.0 - 2.0 * clamped)
-
-
-def _idle_breathing_wave(elapsed: float, frequency_hz: float) -> float:
-    """Mechanical-friendly idle breathing wave in the -1..1 range."""
-    frequency = max(0.01, frequency_hz)
-    phase = (elapsed * frequency) % 1.0
-    if phase < 0.4:
-        return -1.0 + 2.0 * _smoothstep(phase / 0.4)
-    if phase < 0.52:
-        return 1.0
-    if phase < 0.92:
-        return 1.0 - 2.0 * _smoothstep((phase - 0.52) / 0.4)
-    return -1.0
-
-
 @dataclass
 class AnimationParams:
     """Parameters for a single animation with per-axis frequencies."""
@@ -318,14 +300,9 @@ class AnimationPlayer:
             y_freq = params.y_frequency_hz if params.y_frequency_hz > 0 else base_freq
             z_freq = params.z_frequency_hz if params.z_frequency_hz > 0 else base_freq
 
-            if params.name == "idle":
-                breath_wave = _idle_breathing_wave(elapsed, z_freq)
-                pitch = params.pitch_offset_rad - params.pitch_amplitude_rad * breath_wave
-            else:
-                breath_wave = None
-                pitch = params.pitch_offset_rad + params.pitch_amplitude_rad * math.sin(
-                    2 * math.pi * pitch_freq * elapsed + self._phase_pitch
-                )
+            pitch = params.pitch_offset_rad + params.pitch_amplitude_rad * math.sin(
+                2 * math.pi * pitch_freq * elapsed + self._phase_pitch
+            )
 
             yaw = params.yaw_offset_rad + params.yaw_amplitude_rad * math.sin(
                 2 * math.pi * yaw_freq * elapsed + self._phase_yaw
@@ -339,12 +316,8 @@ class AnimationPlayer:
 
             y = params.y_offset_m + params.y_amplitude_m * math.sin(2 * math.pi * y_freq * elapsed + self._phase_y)
 
-            if params.name == "idle" and breath_wave is not None:
-                z = params.z_offset_m + params.z_amplitude_m * breath_wave
-            else:
-                z = params.z_offset_m + params.z_amplitude_m * math.sin(
-                    2 * math.pi * z_freq * elapsed + self._phase_z
-                )
+            z_phase = 0.0 if params.name == "idle" else self._phase_z
+            z = params.z_offset_m + params.z_amplitude_m * math.sin(2 * math.pi * z_freq * elapsed + z_phase)
 
             # Antenna movement with its own frequency
             antenna_freq = params.antenna_frequency_hz if params.antenna_frequency_hz > 0 else base_freq

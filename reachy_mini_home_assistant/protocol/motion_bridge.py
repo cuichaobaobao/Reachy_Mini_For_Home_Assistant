@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import logging
 import math
-import statistics
-import time
 from typing import TYPE_CHECKING
 
 from ..entities.event_emotion_mapper import (
@@ -23,58 +21,29 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 
 
-def _read_stable_wakeup_yaw(protocol: VoiceSatelliteProtocol) -> tuple[float, int, int] | None:
-    """Read a short DOA window and return a stable yaw estimate in degrees."""
-    speech_yaws: list[float] = []
-    fallback_yaws: list[float] = []
-    sample_count = 5
-    for index in range(sample_count):
-        doa = protocol.reachy_controller.get_doa_angle()
-        if doa is not None:
-            angle_rad, speech_detected = doa
-            yaw_deg = math.degrees(-(angle_rad - math.pi / 2))
-            fallback_yaws.append(yaw_deg)
-            if speech_detected:
-                speech_yaws.append(yaw_deg)
-            _LOGGER.debug(
-                "DOA wake sample %d/%d: angle=%.1f°, yaw=%.1f°, speech=%s",
-                index + 1,
-                sample_count,
-                math.degrees(angle_rad),
-                yaw_deg,
-                speech_detected,
-            )
-        if index < sample_count - 1:
-            time.sleep(0.035)
-
-    yaws = speech_yaws if speech_yaws else fallback_yaws
-    if not yaws:
-        return None
-    return statistics.median(yaws), len(speech_yaws), len(fallback_yaws)
-
-
 def turn_to_sound_source(protocol: VoiceSatelliteProtocol) -> None:
     if not protocol.state.motion_enabled:
         _LOGGER.info("DOA turn-to-sound: motion disabled")
         return
     try:
-        stable = _read_stable_wakeup_yaw(protocol)
-        if stable is None:
+        doa = protocol.reachy_controller.get_doa_angle()
+        if doa is None:
             _LOGGER.info("DOA not available, skipping turn-to-sound")
             return
-        yaw_deg, speech_samples, total_samples = stable
-        _LOGGER.debug("DOA stable wake yaw=%.1f° from %d speech samples/%d total", yaw_deg, speech_samples, total_samples)
+        angle_rad, speech_detected = doa
+        _LOGGER.debug("DOA raw: angle=%.3f rad (%.1f°), speech=%s", angle_rad, math.degrees(angle_rad), speech_detected)
+        dir_x = math.sin(angle_rad)
+        dir_y = math.cos(angle_rad)
+        yaw_rad = -(angle_rad - math.pi / 2)
+        yaw_deg = math.degrees(yaw_rad)
+        _LOGGER.debug("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°", dir_x, dir_y, yaw_deg)
         if abs(yaw_deg) < 10.0:
             _LOGGER.debug("DOA angle %.1f° below threshold (%.1f°), skipping turn", yaw_deg, 10.0)
             return
-        target_yaw_deg = yaw_deg * 0.85
-        _LOGGER.info(
-            "Turning toward sound source: DOA yaw=%.1f°, target=%.1f°",
-            yaw_deg,
-            target_yaw_deg,
-        )
+        target_yaw_deg = yaw_deg * 0.8
+        _LOGGER.info("Turning toward sound source: DOA=%.1f°, target=%.1f°", yaw_deg, target_yaw_deg)
         if protocol.state.motion and protocol.state.motion.movement_manager:
-            protocol.state.motion.movement_manager.turn_to_angle(target_yaw_deg, duration=0.65)
+            protocol.state.motion.movement_manager.turn_to_angle(target_yaw_deg, duration=0.5)
     except Exception as e:
         _LOGGER.error("Error in turn-to-sound: %s", e)
 

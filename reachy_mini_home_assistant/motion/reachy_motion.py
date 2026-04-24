@@ -145,12 +145,7 @@ class ReachyMiniMotion:
             return
 
         self._is_speaking = False
-        if self._movement_manager.get_idle_behavior_enabled():
-            self._movement_manager.set_state(RobotState.IDLE)
-            if not self._movement_manager._manual_head_yaw_hold:
-                self._movement_manager.reset_to_neutral(duration=1.2)
-            _LOGGER.debug("Reachy Mini: Conversation finished, recentering while restoring idle breathing")
-        elif not self._movement_manager._manual_head_yaw_hold:
+        if not self._movement_manager._manual_head_yaw_hold:
             self._movement_manager.reset_yaw_to_neutral(duration=1.2)
             _LOGGER.debug("Reachy Mini: Conversation finished, recentering yaw before idle")
 
@@ -163,12 +158,10 @@ class ReachyMiniMotion:
             return
 
         self._is_speaking = False
-        already_idle = self._movement_manager.state.robot_state == RobotState.IDLE
         self._movement_manager.set_state(RobotState.IDLE)
         if not self._movement_manager._manual_head_yaw_hold:
             if self._movement_manager.get_idle_behavior_enabled():
-                if not already_idle:
-                    self._movement_manager.reset_to_neutral(duration=1.2)
+                self._movement_manager.reset_to_neutral(duration=1.0)
             else:
                 self._movement_manager.transition_to_idle_rest(duration=2.6)
 

@@ -5,10 +5,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from reachy_mini_home_assistant.motion import animation_player as animation_player_module
-from reachy_mini_home_assistant.motion.animation_player import AnimationPlayer, _idle_breathing_wave
+from reachy_mini_home_assistant.motion.animation_player import AnimationPlayer
 from reachy_mini_home_assistant.motion.state_machine import (
     OFFICIAL_BREATHING_ANTENNA_AMPLITUDE_RAD,
     OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ,
+    OFFICIAL_BREATHING_FREQUENCY_HZ,
+    OFFICIAL_BREATHING_Z_AMPLITUDE_M,
 )
 
 
@@ -21,10 +23,8 @@ class _Clock:
 
 
 class OfficialIdleBreathingTests(unittest.TestCase):
-    def test_idle_animation_layer_uses_visible_mechanical_breathing_with_official_antennas(self):
+    def test_idle_animation_layer_matches_official_breathing_formula(self):
         clock = _Clock(100.0)
-        config = json.loads(Path("reachy_mini_home_assistant/animations/conversation_animations.json").read_text())
-        idle = config["animations"]["idle"]
         with patch.object(animation_player_module.time, "perf_counter", clock.perf_counter):
             player = AnimationPlayer()
             self.assertTrue(player.set_animation("idle"))
@@ -34,15 +34,14 @@ class OfficialIdleBreathingTests(unittest.TestCase):
             clock.value += 0.25
             offsets = player.get_offsets()
 
-        expected_wave = _idle_breathing_wave(0.25, idle["z_frequency_hz"])
-        expected_z = idle["z_amplitude_m"] * expected_wave
-        expected_pitch = -idle["pitch_amplitude_rad"] * expected_wave
+        expected_z = OFFICIAL_BREATHING_Z_AMPLITUDE_M * math.sin(
+            2.0 * math.pi * OFFICIAL_BREATHING_FREQUENCY_HZ * 0.25
+        )
         expected_sway = OFFICIAL_BREATHING_ANTENNA_AMPLITUDE_RAD * math.sin(
             2.0 * math.pi * OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ * 0.25
         )
 
         self.assertAlmostEqual(offsets["z"], expected_z)
-        self.assertAlmostEqual(offsets["pitch"], expected_pitch)
         self.assertAlmostEqual(offsets["antenna_left"], expected_sway)
         self.assertAlmostEqual(offsets["antenna_right"], -expected_sway)
 

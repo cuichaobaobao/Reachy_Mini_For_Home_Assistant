@@ -2,9 +2,8 @@
 
 import importlib.metadata
 import logging
-import threading
-import time
 from collections.abc import Iterable
+from typing import TYPE_CHECKING
 
 # pylint: disable=no-name-in-module
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
@@ -22,8 +21,10 @@ from .entity_bridge import (
     create_entity_registry,
     initialize_entities,
     load_optional_mappings,
-    on_authenticated as replay_entity_states,
     run_ha_disconnected_callback,
+)
+from .entity_bridge import (
+    on_authenticated as replay_entity_states,
 )
 from .message_dispatch import handle_message as dispatch_message
 from .motion_bridge import (
@@ -54,12 +55,17 @@ from .voice_pipeline import (
     handle_voice_event,
     play_timer_finished,
     play_tts,
-    stop as stop_pipeline,
     unduck,
 )
+from .voice_pipeline import (
+    stop as stop_pipeline,
+)
+
+if TYPE_CHECKING:
+    import threading
 
 _LOGGER = logging.getLogger(__name__)
-IDLE_RETURN_DELAY_S = 10.0
+IDLE_RETURN_DELAY_S = 1.3
 
 try:
     _AIOESPHOMEAPI_VERSION = importlib.metadata.version("aioesphomeapi")

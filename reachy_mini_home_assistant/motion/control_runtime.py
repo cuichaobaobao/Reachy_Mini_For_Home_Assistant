@@ -71,6 +71,8 @@ def compose_final_pose(manager: MovementManager) -> tuple[np.ndarray, tuple[floa
     active_turn_action = (
         manager._pending_action is not None and manager._pending_action.name in {"turn_to", "doa_turn"}
     )
+    if manager.state.robot_state == RobotState.SPEAKING and not active_turn_action:
+        target_body_yaw = manager._body_yaw_smoothed if manager._body_yaw_smoothed is not None else 0.0
     if (
         manager.state.robot_state == RobotState.IDLE
         and not manager._manual_head_yaw_hold

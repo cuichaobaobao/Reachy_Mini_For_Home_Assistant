@@ -92,9 +92,15 @@ class MotionTimingSourceTests(unittest.TestCase):
 
         self.assertIn('protocol._run_motion_state("conversation_finished", "on_conversation_finished")', session_flow)
         self.assertIn("def on_conversation_finished", reachy_motion)
-        self.assertIn("reset_to_neutral(duration=1.2)", reachy_motion)
-        self.assertIn("recentering while restoring idle breathing", reachy_motion)
+        self.assertIn("reset_yaw_to_neutral(duration=1.2)", reachy_motion)
         self.assertIn("if not self._movement_manager._manual_head_yaw_hold", reachy_motion)
+        self.assertIn("IDLE_RETURN_DELAY_S = 1.3", Path("reachy_mini_home_assistant/protocol/satellite.py").read_text(encoding="utf-8"))
+
+    def test_speaking_keeps_body_yaw_fixed(self):
+        content = Path("reachy_mini_home_assistant/motion/control_runtime.py").read_text(encoding="utf-8")
+
+        self.assertIn("manager.state.robot_state == RobotState.SPEAKING", content)
+        self.assertIn("target_body_yaw = manager._body_yaw_smoothed", content)
 
 
 class VoicePipelineStopTests(unittest.TestCase):

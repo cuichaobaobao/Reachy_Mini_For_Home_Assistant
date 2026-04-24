@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.30] - 2026-04-24
+
+### Changed
+- Restore the idle breathing layer to the official Reachy Mini conversation parameters and sine-wave head Z formula.
+- Restore the conservative TTS completion flow: recenter first, then resume idle breathing shortly after the return.
+- Revert wakeup DOA turning to the previous immediate single-read behavior after the short median window showed no practical improvement.
+- Restore thinking animation amplitudes to the previous conservative values to reduce visible state-transition jumps.
+
+### Fixed
+- Keep body yaw fixed during TTS speaking so audio-driven speech motion does not sway the body.
+
 ## [1.0.29] - 2026-04-24
 
 ### Changed

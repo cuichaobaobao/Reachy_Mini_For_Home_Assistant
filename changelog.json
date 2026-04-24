@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.0.30",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.30",
+      "Change: Restore idle breathing to the official Reachy Mini conversation parameters and sine-wave head Z formula",
+      "Change: Restore conservative TTS completion flow so the robot recenters before idle breathing resumes shortly after",
+      "Change: Revert wakeup DOA turning to the previous immediate single-read behavior",
+      "Change: Restore thinking animation amplitudes to previous conservative values",
+      "Fix: Keep body yaw fixed during TTS speaking so speech sway does not move the body"
+    ]
+  },
+  {
     "version": "1.0.29",
     "date": "2026-04-24",
     "changes": [
