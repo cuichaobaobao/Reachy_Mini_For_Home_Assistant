@@ -317,7 +317,8 @@ class AnimationPlayer:
 
             y = params.y_offset_m + params.y_amplitude_m * math.sin(2 * math.pi * y_freq * elapsed + self._phase_y)
 
-            z = params.z_offset_m + params.z_amplitude_m * math.sin(2 * math.pi * z_freq * elapsed + self._phase_z)
+            z_phase = 0.0 if params.name == "idle" else self._phase_z
+            z = params.z_offset_m + params.z_amplitude_m * math.sin(2 * math.pi * z_freq * elapsed + z_phase)
 
             # Antenna movement with its own frequency
             antenna_freq = params.antenna_frequency_hz if params.antenna_frequency_hz > 0 else base_freq

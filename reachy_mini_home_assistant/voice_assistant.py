@@ -1,11 +1,11 @@
-from __future__ import annotations
-
 """
 Voice Assistant Service for Reachy Mini.
 
 This module provides the main voice assistant service that integrates
 with Home Assistant via ESPHome protocol.
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
@@ -47,11 +47,10 @@ class AudioProcessingContext:
     last_active: float | None = None
 
 
-# Audio chunk size for consistent streaming
-# Smaller chunks = faster VAD response
+# Audio chunk size for consistent streaming.
+# 512 samples lowers idle audio-loop CPU pressure while keeping wake latency reasonable.
 # ESPHome typical range: 256-512 samples
-# Going smaller improves latency but increases CPU/network overhead
-AUDIO_BLOCK_SIZE = 256  # samples at 16kHz = 16ms (optimized for low latency)
+AUDIO_BLOCK_SIZE = 512  # samples at 16kHz = 32ms
 MAX_AUDIO_BUFFER_SIZE = AUDIO_BLOCK_SIZE * 40  # Max 40 chunks (~640ms) to prevent memory leak
 
 

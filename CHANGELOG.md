@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.22] - 2026-04-24
+
+### Changed
+- Restore ha-china-style continuous idle animation layering so official breathing keeps running smoothly through realtime generated idle motion.
+- Increase the voice audio block size to reduce idle audio-loop CPU pressure while keeping wake latency reasonable.
+
+### Fixed
+- Remove the quiet-idle breathing short-circuit that made generated idle actions snap between control paths.
+- Start realtime idle actions from the primary target pose again so breathing remains an additive layer instead of being baked into the next action target.
+
 ## [1.0.21] - 2026-04-24
 
 ### Changed

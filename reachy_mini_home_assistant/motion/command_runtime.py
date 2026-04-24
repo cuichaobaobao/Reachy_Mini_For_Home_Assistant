@@ -7,8 +7,6 @@ import math
 from queue import Empty
 from typing import TYPE_CHECKING, Any
 
-from scipy.spatial.transform import Rotation as R
-
 from .emotion_moves import EmotionMove, is_emotion_available
 from .state_machine import (
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
@@ -24,7 +22,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def poll_commands(manager: "MovementManager") -> None:
+def poll_commands(manager: MovementManager) -> None:
     while True:
         try:
             cmd, payload = manager._command_queue.get_nowait()
@@ -45,7 +43,7 @@ def poll_commands(manager: "MovementManager") -> None:
         handle_command(manager, cmd, payload)
 
 
-def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
+def handle_command(manager: MovementManager, cmd: str, payload: Any) -> None:
     if cmd == "set_state":
         old_state = manager.state.robot_state
         manager.state.robot_state = payload
@@ -171,7 +169,7 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
         manager._apply_idle_behavior_enabled(bool(payload))
 
 
-def start_emotion_move(manager: "MovementManager", emotion_name: str) -> None:
+def start_emotion_move(manager: MovementManager, emotion_name: str) -> None:
     if not is_emotion_available():
         logger.warning("Cannot play emotion '%s': emotion library not available", emotion_name)
         return
@@ -186,32 +184,10 @@ def start_emotion_move(manager: "MovementManager", emotion_name: str) -> None:
         logger.error("Failed to start emotion '%s': %s", emotion_name, e)
 
 
-def start_action(manager: "MovementManager", action: PendingAction) -> None:
+def start_action(manager: MovementManager, action: PendingAction) -> None:
     manager._pending_action = action
     manager._action_start_time = manager._now()
-    start_pose = None
-    if action.name.startswith("idle_generated") and manager._last_sent_head_pose is not None:
-        try:
-            rotation = R.from_matrix(manager._last_sent_head_pose[:3, :3])
-            roll, pitch, yaw = rotation.as_euler("xyz")
-            start_pose = {
-                "pitch": float(pitch),
-                "yaw": float(yaw),
-                "roll": float(roll),
-                "x": float(manager._last_sent_head_pose[0, 3]),
-                "y": float(manager._last_sent_head_pose[1, 3]),
-                "z": float(manager._last_sent_head_pose[2, 3]),
-                "antenna_left": manager.state.target_antenna_left,
-                "antenna_right": manager.state.target_antenna_right,
-            }
-            if manager._last_sent_antennas is not None:
-                # Internal target order is local left/right; SDK command order is right/left.
-                start_pose["antenna_left"] = float(manager._last_sent_antennas[1])
-                start_pose["antenna_right"] = float(manager._last_sent_antennas[0])
-        except Exception as e:
-            logger.debug("Falling back to target-state start pose for %s: %s", action.name, e)
-
-    manager._action_start_pose = start_pose or {
+    manager._action_start_pose = {
         "pitch": manager.state.target_pitch,
         "yaw": manager.state.target_yaw,
         "roll": manager.state.target_roll,
@@ -224,14 +200,14 @@ def start_action(manager: "MovementManager", action: PendingAction) -> None:
     logger.debug("Starting action: %s", action.name)
 
 
-def do_nod(manager: "MovementManager", amplitude_deg: float, duration: float) -> None:
+def do_nod(manager: MovementManager, amplitude_deg: float, duration: float) -> None:
     amplitude_rad = math.radians(amplitude_deg)
     half_duration = duration / 2
     action_down = PendingAction(name="nod_down", target_pitch=amplitude_rad, duration=half_duration)
     start_action(manager, action_down)
 
 
-def do_shake(manager: "MovementManager", amplitude_deg: float, duration: float) -> None:
+def do_shake(manager: MovementManager, amplitude_deg: float, duration: float) -> None:
     amplitude_rad = math.radians(amplitude_deg)
     half_duration = duration / 2
     action_left = PendingAction(name="shake_left", target_yaw=-amplitude_rad, duration=half_duration)

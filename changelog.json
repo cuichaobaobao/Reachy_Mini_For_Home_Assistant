@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.22",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.22",
+      "Change: Restore continuous idle animation layering so official breathing stays smooth through realtime generated idle motion",
+      "Fix: Remove the quiet-idle breathing short-circuit that made generated idle actions snap between control paths",
+      "Fix: Start realtime idle actions from the primary target pose so breathing remains additive instead of being baked into action targets",
+      "Change: Increase the voice audio block size to reduce idle audio-loop CPU pressure"
+    ]
+  },
+  {
     "version": "1.0.21",
     "date": "2026-04-24",
     "changes": [

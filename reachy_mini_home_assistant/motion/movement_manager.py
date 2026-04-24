@@ -179,12 +179,6 @@ class MovementManager:
         self._last_sent_body_yaw: float | None = None
         self._last_send_time = 0.0
 
-        # Official idle breathing primary pose state.
-        self._official_idle_breathing_active = False
-        self._official_idle_breathing_start_time = 0.0
-        self._official_idle_breathing_start_head_pose: np.ndarray | None = None
-        self._official_idle_breathing_start_antennas: tuple[float, float] | None = None
-
         # Command send pacing (separate from control loop frequency)
         control_rate = max(1.0, float(Config.motion.control_rate_hz or DEFAULT_CONTROL_LOOP_FREQUENCY_HZ))
         self._control_loop_hz = control_rate
@@ -784,17 +778,6 @@ class MovementManager:
     def _update_animation(self, dt: float) -> None:
         """Update animation offsets from AnimationPlayer."""
         dt_safe = max(0.0, min(dt, MAX_CONTROL_DT_S))
-        if self.state.robot_state == RobotState.IDLE and self._idle_motion_enabled:
-            self.state.anim_pitch = 0.0
-            self.state.anim_yaw = 0.0
-            self.state.anim_roll = 0.0
-            self.state.anim_x = 0.0
-            self.state.anim_y = 0.0
-            self.state.anim_z = 0.0
-            self.state.anim_antenna_left = 0.0
-            self.state.anim_antenna_right = 0.0
-            return
-
         idle_queue_action_active = (
             self.state.robot_state == RobotState.IDLE
             and self.state.look_around_in_progress

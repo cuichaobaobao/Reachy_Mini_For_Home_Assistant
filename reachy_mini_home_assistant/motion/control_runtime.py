@@ -8,20 +8,10 @@ import time
 from typing import TYPE_CHECKING
 
 import numpy as np
-from reachy_mini.utils.interpolation import linear_pose_interpolation
 
 from ..core.config import Config
 from .pose_composer import clamp_body_yaw, compose_poses, create_head_pose_matrix, extract_yaw_from_pose
-from .state_machine import (
-    OFFICIAL_BREATHING_ANTENNA_AMPLITUDE_RAD,
-    OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ,
-    OFFICIAL_BREATHING_FREQUENCY_HZ,
-    OFFICIAL_BREATHING_INTERPOLATION_DURATION_S,
-    OFFICIAL_BREATHING_Z_AMPLITUDE_M,
-    OFFICIAL_NEUTRAL_ANTENNA_SDK_LEFT_RAD,
-    OFFICIAL_NEUTRAL_ANTENNA_SDK_RIGHT_RAD,
-    RobotState,
-)
+from .state_machine import RobotState
 
 if TYPE_CHECKING:
     from .movement_manager import MovementManager
@@ -29,86 +19,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def reset_official_idle_breathing(manager: "MovementManager") -> None:
-    manager._official_idle_breathing_active = False
-    manager._official_idle_breathing_start_time = 0.0
-    manager._official_idle_breathing_start_head_pose = None
-    manager._official_idle_breathing_start_antennas = None
-
-
-def evaluate_official_idle_breathing(
-    manager: "MovementManager",
-    fallback_head: np.ndarray,
-    fallback_antennas_sdk: tuple[float, float],
-) -> tuple[np.ndarray, tuple[float, float], float] | None:
-    """Evaluate the official BreathingMove pose for quiet idle."""
-    if (
-        manager.state.robot_state != RobotState.IDLE
-        or not manager._idle_motion_enabled
-        or not manager._idle_antenna_enabled
-        or manager._pending_action is not None
-        or manager._idle_action_queue
-        or manager.state.look_around_in_progress
-    ):
-        reset_official_idle_breathing(manager)
-        return None
-
-    now = manager._now()
-    if not manager._official_idle_breathing_active:
-        manager._official_idle_breathing_active = True
-        manager._official_idle_breathing_start_time = now
-        try:
-            _, current_antennas = manager.robot.get_current_joint_positions()
-            manager._official_idle_breathing_start_antennas = tuple(float(v) for v in current_antennas)
-        except Exception as e:
-            logger.debug("Falling back to last commanded antennas for official breathing start: %s", e)
-            manager._official_idle_breathing_start_antennas = (
-                tuple(float(v) for v in manager._last_sent_antennas)
-                if manager._last_sent_antennas is not None
-                else fallback_antennas_sdk
-            )
-        try:
-            manager._official_idle_breathing_start_head_pose = manager.robot.get_current_head_pose()
-        except Exception as e:
-            logger.debug("Falling back to last commanded head pose for official breathing start: %s", e)
-            manager._official_idle_breathing_start_head_pose = (
-                manager._last_sent_head_pose.copy()
-                if manager._last_sent_head_pose is not None
-                else fallback_head.copy()
-            )
-
-    elapsed = now - manager._official_idle_breathing_start_time
-    neutral_head = create_head_pose_matrix()
-    neutral_antennas = np.array(
-        [OFFICIAL_NEUTRAL_ANTENNA_SDK_LEFT_RAD, OFFICIAL_NEUTRAL_ANTENNA_SDK_RIGHT_RAD],
-        dtype=np.float64,
-    )
-
-    if elapsed < OFFICIAL_BREATHING_INTERPOLATION_DURATION_S:
-        interpolation_t = elapsed / OFFICIAL_BREATHING_INTERPOLATION_DURATION_S
-        start_head = manager._official_idle_breathing_start_head_pose
-        if start_head is None:
-            start_head = fallback_head
-        head_pose = linear_pose_interpolation(start_head, neutral_head, interpolation_t)
-        start_antennas = np.array(
-            manager._official_idle_breathing_start_antennas or fallback_antennas_sdk,
-            dtype=np.float64,
-        )
-        antennas = (1.0 - interpolation_t) * start_antennas + interpolation_t * neutral_antennas
-        return head_pose, (float(antennas[0]), float(antennas[1])), 0.0
-
-    breathing_time = elapsed - OFFICIAL_BREATHING_INTERPOLATION_DURATION_S
-    z_offset = OFFICIAL_BREATHING_Z_AMPLITUDE_M * math.sin(
-        2.0 * math.pi * OFFICIAL_BREATHING_FREQUENCY_HZ * breathing_time
-    )
-    head_pose = create_head_pose_matrix(z=z_offset)
-    antenna_sway = OFFICIAL_BREATHING_ANTENNA_AMPLITUDE_RAD * math.sin(
-        2.0 * math.pi * OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ * breathing_time
-    )
-    return head_pose, (antenna_sway, -antenna_sway), 0.0
-
-
-def update_emotion_move(manager: "MovementManager") -> tuple[np.ndarray, tuple[float, float], float] | None:
+def update_emotion_move(manager: MovementManager) -> tuple[np.ndarray, tuple[float, float], float] | None:
     with manager._emotion_move_lock:
         if manager._emotion_move is None:
             return None
@@ -129,7 +40,7 @@ def update_emotion_move(manager: "MovementManager") -> tuple[np.ndarray, tuple[f
             return None
 
 
-def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[float, float], float]:
+def compose_final_pose(manager: MovementManager) -> tuple[np.ndarray, tuple[float, float], float]:
     primary_head = create_head_pose_matrix(
         x=manager.state.target_x,
         y=manager.state.target_y,
@@ -154,16 +65,6 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
     target_antenna_left = manager.state.target_antenna_left + anim_antenna_left
     target_antenna_right = manager.state.target_antenna_right + anim_antenna_right
     antenna_left, antenna_right = manager._antenna_controller.get_blended_positions(target_antenna_left, target_antenna_right)
-
-    official_idle_pose = evaluate_official_idle_breathing(
-        manager,
-        final_head,
-        (antenna_right, antenna_left),
-    )
-    if official_idle_pose is not None:
-        manager._body_yaw_smoothed = 0.0
-        manager._last_body_yaw_update = manager._now()
-        return official_idle_pose
 
     final_head_yaw = extract_yaw_from_pose(final_head)
     target_body_yaw = clamp_body_yaw(final_head_yaw)
@@ -198,7 +99,7 @@ def compose_final_pose(manager: "MovementManager") -> tuple[np.ndarray, tuple[fl
     return final_head, (antenna_right, antenna_left), manager._body_yaw_smoothed
 
 
-def issue_control_command(manager: "MovementManager", head_pose: np.ndarray, antennas: tuple[float, float], body_yaw: float) -> None:
+def issue_control_command(manager: MovementManager, head_pose: np.ndarray, antennas: tuple[float, float], body_yaw: float) -> None:
     if manager._draining_event.is_set() or manager._emotion_playing_event.is_set() or manager._robot_paused_event.is_set():
         return
     now = manager._now()
@@ -245,7 +146,7 @@ def issue_control_command(manager: "MovementManager", head_pose: np.ndarray, ant
             manager._log_error_throttled(f"Failed to set robot target: {error_msg}")
 
 
-def run_control_loop(manager: "MovementManager", *, max_control_dt_s: float) -> None:
+def run_control_loop(manager: MovementManager, *, max_control_dt_s: float) -> None:
     logger.info("Movement manager control loop started (%.1f Hz)", manager._control_loop_hz)
     last_time = manager._now()
     while not manager._stop_event.is_set():
