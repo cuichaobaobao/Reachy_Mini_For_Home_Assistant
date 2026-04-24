@@ -101,6 +101,9 @@ class MotionTimingSourceTests(unittest.TestCase):
 
         self.assertIn("manager.state.robot_state == RobotState.SPEAKING", content)
         self.assertIn("target_body_yaw = manager._body_yaw_smoothed", content)
+        self.assertIn("active_recenter_action", content)
+        self.assertIn('manager._pending_action.name in {"neutral", "neutral_yaw"}', content)
+        self.assertIn("not (active_turn_action or active_recenter_action)", content)
 
 
 class VoicePipelineStopTests(unittest.TestCase):

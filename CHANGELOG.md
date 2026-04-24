@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.32] - 2026-04-24
+
+### Fixed
+- Let body yaw follow the TTS completion recenter action so the head and body return to neutral together while keeping body yaw fixed during active speech.
+
 ## [1.0.31] - 2026-04-24
 
 ### Changed

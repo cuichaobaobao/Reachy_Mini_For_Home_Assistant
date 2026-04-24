@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.0.32",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.32",
+      "Fix: Let body yaw follow the TTS completion recenter action so head and body return to neutral together while keeping body yaw fixed during active speech"
+    ]
+  },
+  {
     "version": "1.0.31",
     "date": "2026-04-24",
     "changes": [
