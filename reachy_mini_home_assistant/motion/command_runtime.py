@@ -20,6 +20,19 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def _cancel_idle_motion_for_wakeup(manager: MovementManager) -> None:
+    """Stop idle-only motion immediately when wake/listen takes over."""
+    pending = manager._pending_action
+    if pending is not None and (
+        pending.name == "look_around" or pending.name.startswith(("idle_action", "idle_generated"))
+    ):
+        manager._pending_action = None
+    manager._idle_action_queue.clear()
+    manager.state.look_around_in_progress = False
+    manager.state.next_look_around_time = 0.0
+    manager._idle_action_animation_suppression = 0.0
+
+
 def poll_commands(manager: MovementManager) -> None:
     while True:
         try:
@@ -59,6 +72,9 @@ def handle_command(manager: MovementManager, cmd: str, payload: Any) -> None:
             manager._start_antenna_unfreeze()
 
         if payload != RobotState.IDLE:
+            if old_state == RobotState.IDLE:
+                _cancel_idle_motion_for_wakeup(manager)
+
             # Preserve the current pose anchor during an active conversation.
             # This keeps wakeup turn-to-sound orientation until the session
             # actually ends and `on_idle()` decides how to settle the robot.

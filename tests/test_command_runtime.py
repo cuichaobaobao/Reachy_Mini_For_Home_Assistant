@@ -16,6 +16,7 @@ class CommandRuntimeSourceTests(unittest.TestCase):
         body = match.group("body")
 
         self.assertNotIn("manager.state.target_yaw = 0.0", body)
+        self.assertIn("_cancel_idle_motion_for_wakeup(manager)", body)
         self.assertIn("Preserve the current pose anchor", body)
         self.assertIn('name="wake_from_idle_rest"', body)
         self.assertIn("target_pitch=0.0", body)
@@ -30,6 +31,18 @@ class CommandRuntimeSourceTests(unittest.TestCase):
         self.assertIn("manager._pending_action = None", body)
         self.assertIn("start_action(manager, action)", body)
         self.assertIn("manager._antenna_controller.reset()", body)
+
+    def test_wakeup_cancels_idle_only_motion_immediately(self):
+        path = Path("reachy_mini_home_assistant/motion/command_runtime.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn("def _cancel_idle_motion_for_wakeup", content)
+        self.assertIn('pending.name.startswith(("idle_action", "idle_generated"))', content)
+        self.assertIn("manager._pending_action = None", content)
+        self.assertIn("manager._idle_action_queue.clear()", content)
+        self.assertIn("manager.state.look_around_in_progress = False", content)
+        self.assertIn("manager.state.next_look_around_time = 0.0", content)
+        self.assertIn("manager._idle_action_animation_suppression = 0.0", content)
 
 
 class MotionTimingSourceTests(unittest.TestCase):
@@ -50,10 +63,20 @@ class MotionTimingSourceTests(unittest.TestCase):
         self.assertIn("antenna_delta > ANTENNA_LARGE_MOVE_THRESHOLD_RAD", content)
         self.assertIn("pose_progress = min(1.0, elapsed / pose_duration)", content)
         self.assertIn("antenna_progress = min(1.0, elapsed / antenna_duration)", content)
+        self.assertIn("t = _smootherstep(pose_progress)", content)
+        self.assertIn("antenna_t = _smootherstep(antenna_progress)", content)
         self.assertIn('completed_action.name.startswith(("idle_action", "idle_generated"))', content)
         self.assertIn('self._pending_action.name.startswith(("idle_action", "idle_generated"))', content)
         self.assertIn("def reset_yaw_to_neutral", content)
         self.assertIn('name="neutral_yaw"', content)
+
+    def test_idle_generated_keeps_antennas_alive_and_smooths_breathing_z(self):
+        path = Path("reachy_mini_home_assistant/motion/movement_manager.py")
+        content = path.read_text(encoding="utf-8")
+
+        self.assertIn("IDLE_ACTION_ANTENNA_SUPPRESSION = 0.0", content)
+        self.assertIn("IDLE_BREATHING_Z_SMOOTHING_TAU_S", content)
+        self.assertIn("self._idle_breathing_z_smoothed", content)
 
     def test_disabled_idle_rest_return_is_gentler(self):
         path = Path("reachy_mini_home_assistant/motion/reachy_motion.py")

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.26] - 2026-04-24
+
+### Changed
+- Interrupt generated idle sequences immediately when the robot leaves IDLE so wakeup/DOA/listening can take over without waiting for idle motion.
+- Keep official antenna breathing at full strength during generated idle sequences instead of fading most of it out.
+- Use the softer smootherstep interpolation for generated idle sequence segments.
+- Add light smoothing to the idle breathing Z offset to reduce visible head micro-jitter from tiny motor updates.
+
 ## [1.0.25] - 2026-04-24
 
 ### Changed

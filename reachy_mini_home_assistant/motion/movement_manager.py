@@ -74,8 +74,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 60
 MAX_CONTROL_DT_S = 0.05
 
-IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.7  # Crossfade breathing in/out around generated idle actions
-IDLE_ACTION_ANTENNA_SUPPRESSION = 0.75  # Keep a small antenna breath while generated idle action owns the pose
+IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.7  # Crossfade head breathing in/out around generated idle actions
+IDLE_ACTION_ANTENNA_SUPPRESSION = 0.0  # Keep official antenna breathing fully active during generated idle actions
+IDLE_BREATHING_Z_SMOOTHING_TAU_S = 0.22  # Low-pass only the idle z breath to reduce motor micro-jitter
 ANTENNA_LARGE_MOVE_THRESHOLD_RAD = 1.0
 ANTENNA_WAKE_MIN_DURATION_S = 1.0
 ANTENNA_WAKE_ACTIONS = frozenset({"turn_to", "doa_turn", "wake_from_idle_rest"})
@@ -171,6 +172,7 @@ class MovementManager:
         self._action_start_pose: dict[str, float] = {}
         self._idle_action_queue: deque[PendingAction] = deque()
         self._idle_action_animation_suppression = 0.0
+        self._idle_breathing_z_smoothed = 0.0
         self._manual_head_yaw_hold = False
 
         # Last sent pose for change detection (reduce daemon load)
@@ -740,14 +742,8 @@ class MovementManager:
 
         pose_progress = min(1.0, elapsed / pose_duration)
         antenna_progress = min(1.0, elapsed / antenna_duration)
-        if action.name.startswith("idle_generated"):
-            # Generated idle cycles already crossfade breathing, so use a
-            # slightly more responsive curve than the extra-flat smootherstep.
-            t = _smoothstep(pose_progress)
-            antenna_t = _smoothstep(antenna_progress)
-        else:
-            t = _smootherstep(pose_progress)
-            antenna_t = _smootherstep(antenna_progress)
+        t = _smootherstep(pose_progress)
+        antenna_t = _smootherstep(antenna_progress)
 
         # Interpolate pose
         self.state.target_pitch = start["pitch"] + t * (action.target_pitch - start["pitch"])
@@ -834,7 +830,14 @@ class MovementManager:
         self.state.anim_roll = offsets["roll"] * idle_animation_scale
         self.state.anim_x = offsets["x"] * idle_animation_scale
         self.state.anim_y = offsets["y"] * idle_animation_scale
-        self.state.anim_z = offsets["z"] * idle_animation_scale
+        anim_z = offsets["z"] * idle_animation_scale
+        if self.state.robot_state == RobotState.IDLE and idle_animation_scale > 0.0:
+            alpha = min(1.0, dt_safe / IDLE_BREATHING_Z_SMOOTHING_TAU_S)
+            self._idle_breathing_z_smoothed += alpha * (anim_z - self._idle_breathing_z_smoothed)
+            anim_z = self._idle_breathing_z_smoothed
+        else:
+            self._idle_breathing_z_smoothed = anim_z
+        self.state.anim_z = anim_z
         if self.state.robot_state != RobotState.IDLE or self._idle_antenna_enabled:
             self.state.anim_antenna_left = offsets["antenna_left"] * antenna_animation_scale
             self.state.anim_antenna_right = offsets["antenna_right"] * antenna_animation_scale

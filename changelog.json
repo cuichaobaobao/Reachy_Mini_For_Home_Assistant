@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.26",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.26",
+      "Fix: Interrupt generated idle sequences immediately when wakeup, DOA, or listening takes over",
+      "Change: Keep official antenna breathing at full strength during generated idle sequences",
+      "Change: Use softer smootherstep interpolation for generated idle sequence segments",
+      "Fix: Smooth idle breathing Z output to reduce visible head micro-jitter from tiny motor updates"
+    ]
+  },
+  {
     "version": "1.0.25",
     "date": "2026-04-24",
     "changes": [
