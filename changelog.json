@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.25",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.25",
+      "Change: Upgrade realtime idle motion from single generated targets to generated multi-step sequences",
+      "Change: Perform smooth look/lift/dip idle sequences with a brief hold and a return to breathing neutral",
+      "Change: Retune idle timing so visible generated motion lasts several seconds and the next sequence waits a random 3-15 seconds",
+      "Change: Keep generated idle antennas on the official neutral target while pose parameters stay runtime-generated"
+    ]
+  },
+  {
     "version": "1.0.24",
     "date": "2026-04-24",
     "changes": [

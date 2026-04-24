@@ -150,4 +150,4 @@ ESPHome 端口： 6053
 
 ---
 
-*Reachy Mini 语音助手 v1.0.24*
+*Reachy Mini 语音助手 v1.0.25*

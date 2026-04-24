@@ -12,7 +12,7 @@ from .state_machine import (
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
     PendingAction,
     RobotState,
-    build_generated_idle_pending_action,
+    build_generated_idle_action_sequence,
 )
 
 if TYPE_CHECKING:
@@ -145,20 +145,22 @@ def _return_to_breathing_neutral(duration: float) -> PendingAction:
     )
 
 
-def enqueue_generated_idle_cycle(manager: MovementManager, idle_action: PendingAction) -> float:
+def enqueue_generated_idle_cycle(manager: MovementManager, idle_actions: list[PendingAction]) -> float:
     """Queue one generated idle cycle with breathing crossfade and return."""
     config = manager._idle_generation_config
     fade_out = _random_duration(config.fade_out_duration_range_s, 0.7)
     hold = _random_duration(config.hold_range_s, 0.6)
     return_duration = _random_duration(config.return_duration_range_s, 1.4)
+    final_action = idle_actions[-1]
 
     manager._idle_action_queue.append(
         _current_target_action(manager, name="idle_generated_fade_out", duration=fade_out)
     )
-    manager._idle_action_queue.append(idle_action)
-    manager._idle_action_queue.append(_hold_generated_action(idle_action, duration=hold))
+    manager._idle_action_queue.extend(idle_actions)
+    manager._idle_action_queue.append(_hold_generated_action(final_action, duration=hold))
     manager._idle_action_queue.append(_return_to_breathing_neutral(return_duration))
-    return fade_out + max(0.0, float(idle_action.duration)) + hold + return_duration
+    action_duration = sum(max(0.0, float(action.duration)) for action in idle_actions)
+    return fade_out + action_duration + hold + return_duration
 
 
 def update_idle_look_around(
@@ -205,14 +207,14 @@ def update_idle_look_around(
             schedule_next_idle_action_time(manager, now)
             return
 
-        idle_action, signature = build_generated_idle_pending_action(
+        idle_actions, signature = build_generated_idle_action_sequence(
             manager._idle_generation_config,
             last_yaw_rad=manager._last_idle_generated_yaw,
             last_signature=manager._last_idle_generated_signature,
         )
-        manager._last_idle_generated_yaw = idle_action.target_yaw
+        manager._last_idle_generated_yaw = idle_actions[0].target_yaw
         manager._last_idle_generated_signature = signature
-        queued_duration = enqueue_generated_idle_cycle(manager, idle_action)
+        queued_duration = enqueue_generated_idle_cycle(manager, idle_actions)
         manager.state.look_around_in_progress = True
         manager.state.next_look_around_time = now + queued_duration
         schedule_next_idle_action_time(manager, manager.state.next_look_around_time)

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.25] - 2026-04-24
+
+### Changed
+- Upgrade realtime idle motion from single generated targets to generated multi-step sequences.
+- Each idle trigger now performs a smooth look/lift/dip sequence, briefly holds, then returns to breathing neutral.
+- Retune generated idle timing so visible sequence motion lasts several seconds and the next sequence waits a random 3-15 seconds.
+- Keep generated idle antennas on the official neutral target while the pose sequence stays fully runtime-generated.
+
 ## [1.0.24] - 2026-04-24
 
 ### Changed

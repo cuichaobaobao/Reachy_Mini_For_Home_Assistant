@@ -209,12 +209,12 @@ def load_idle_behavior_config(
         roll_range_deg=(-6.0, 6.0),
         x_range_m=(-0.002, 0.002),
         y_range_m=(-0.002, 0.002),
-        z_range_m=(-0.002, 0.006),
+        z_range_m=(-0.002, 0.01),
         antenna_variation_range_rad=(-0.06, 0.06),
-        duration_range_s=(2.2, 4.2),
-        hold_range_s=(0.35, 0.9),
-        return_duration_range_s=(1.0, 1.8),
-        fade_out_duration_range_s=(0.55, 0.85),
+        duration_range_s=(3.2, 4.8),
+        hold_range_s=(0.7, 1.4),
+        return_duration_range_s=(1.4, 2.2),
+        fade_out_duration_range_s=(0.25, 0.45),
         opposite_direction_bias=0.68,
         micro_motion_probability=0.05,
         min_repeat_distance=0.35,
@@ -349,6 +349,15 @@ def _sample_generated_idle_values(
     return yaw, pitch, roll, x, y, z, antenna_left, antenna_right, duration, random.random()
 
 
+def _split_sequence_duration(total_duration: float) -> tuple[float, float, float]:
+    """Split a generated idle movement into three slow, visible segments."""
+    first = random.uniform(0.34, 0.42)
+    second = random.uniform(0.28, 0.36)
+    third = max(0.22, 1.0 - first - second)
+    scale = max(3.0, total_duration) / (first + second + third)
+    return first * scale, second * scale, third * scale
+
+
 def _generated_distance(candidate: tuple[float, ...], previous: tuple[float, ...] | None) -> float:
     if previous is None:
         return 1.0
@@ -399,3 +408,72 @@ def build_generated_idle_pending_action(
         target_antenna_right=antenna_right,
         duration=duration,
     ), best
+
+
+def build_generated_idle_action_sequence(
+    config: IdleGenerationConfig,
+    *,
+    last_yaw_rad: float = 0.0,
+    last_signature: tuple[float, ...] | None = None,
+) -> tuple[list[PendingAction], tuple[float, ...]]:
+    """Generate a multi-step idle action sequence from fresh runtime parameters."""
+    action, signature = build_generated_idle_pending_action(
+        config,
+        last_yaw_rad=last_yaw_rad,
+        last_signature=last_signature,
+    )
+    look_duration, lift_duration, dip_duration = _split_sequence_duration(action.duration)
+    yaw_sign = 1.0 if action.target_yaw >= 0.0 else -1.0
+    lift_z = max(action.target_z, random.uniform(0.006, 0.011))
+    dip_z = random.uniform(-0.002, 0.0015)
+    look_pitch = action.target_pitch * random.uniform(0.35, 0.65)
+    lift_pitch = -abs(random.uniform(math.radians(2.0), math.radians(6.0)))
+    dip_pitch = abs(random.uniform(math.radians(4.0), math.radians(10.0)))
+    look_roll = action.target_roll * random.uniform(0.25, 0.55)
+    lift_roll = action.target_roll * random.uniform(0.45, 0.8)
+    dip_roll = -yaw_sign * abs(action.target_roll) * random.uniform(0.35, 0.75)
+    look_x = action.target_x * random.uniform(0.35, 0.65)
+    lift_x = action.target_x
+    dip_x = action.target_x * random.uniform(0.15, 0.45)
+    look_y = action.target_y * random.uniform(0.35, 0.65)
+    lift_y = action.target_y
+    dip_y = -action.target_y * random.uniform(0.15, 0.45)
+
+    return [
+        PendingAction(
+            name="idle_generated_look",
+            target_yaw=action.target_yaw,
+            target_pitch=look_pitch,
+            target_roll=look_roll,
+            target_x=look_x,
+            target_y=look_y,
+            target_z=0.0,
+            target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+            target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
+            duration=look_duration,
+        ),
+        PendingAction(
+            name="idle_generated_lift",
+            target_yaw=action.target_yaw + math.radians(random.uniform(-3.5, 3.5)),
+            target_pitch=lift_pitch,
+            target_roll=lift_roll,
+            target_x=lift_x,
+            target_y=lift_y,
+            target_z=lift_z,
+            target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+            target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
+            duration=lift_duration,
+        ),
+        PendingAction(
+            name="idle_generated_dip",
+            target_yaw=action.target_yaw * random.uniform(0.55, 0.85),
+            target_pitch=dip_pitch,
+            target_roll=dip_roll,
+            target_x=dip_x,
+            target_y=dip_y,
+            target_z=dip_z,
+            target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+            target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
+            duration=dip_duration,
+        ),
+    ], signature
