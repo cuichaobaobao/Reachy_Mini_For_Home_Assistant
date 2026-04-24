@@ -1,5 +1,18 @@
 [
   {
+    "version": "1.0.29",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.29",
+      "Change: Make realtime idle sequences less repetitive with a constrained random action grammar and 5-8 generated steps",
+      "Change: Retune idle breathing for visible motion with a mechanical-friendly up/hold/down/hold curve, slightly larger Z travel, slower frequency, and a small pitch component",
+      "Change: Increase thinking animation head amplitudes",
+      "Fix: Restore idle breathing immediately while TTS completion recentering runs",
+      "Fix: Smooth manual idle enable/disable transitions into neutral/rest poses",
+      "Fix: Stabilize wakeup DOA turning by sampling a short DOA window and using the median yaw"
+    ]
+  },
+  {
     "version": "1.0.28",
     "date": "2026-04-24",
     "changes": [

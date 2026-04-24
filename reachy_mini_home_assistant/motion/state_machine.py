@@ -211,7 +211,7 @@ def load_idle_behavior_config(
         y_range_m=(-0.002, 0.002),
         z_range_m=(-0.006, 0.014),
         antenna_variation_range_rad=(-0.06, 0.06),
-        duration_range_s=(7.0, 10.5),
+        duration_range_s=(7.5, 12.0),
         hold_range_s=(1.0, 2.0),
         return_duration_range_s=(2.2, 3.4),
         fade_out_duration_range_s=(0.35, 0.65),
@@ -283,7 +283,7 @@ def load_idle_behavior_config(
         z_range_m=parse_numeric_range(section.get("z_range_m"), -0.006, 0.014),
         antenna_variation_range_rad=parse_numeric_range(section.get("antenna_variation_range_rad"), -0.06, 0.06),
         duration_range_s=parse_numeric_range(
-            section.get("duration_range_s"), 7.0, 10.5
+            section.get("duration_range_s"), 7.5, 12.0
         ),
         hold_range_s=parse_numeric_range(
             section.get("hold_range_s"), 1.0, 2.0
@@ -388,6 +388,56 @@ def _make_idle_step(
     )
 
 
+_IDLE_PRIMITIVE_CODES = {
+    "look_left": 0.05,
+    "look_right": 0.11,
+    "look_up": 0.17,
+    "look_down": 0.23,
+    "look_up_side": 0.29,
+    "look_down_side": 0.35,
+    "stretch_neck": 0.41,
+    "tuck_neck": 0.47,
+    "tilt_head": 0.53,
+    "opposite_glance": 0.59,
+    "settle_glance": 0.65,
+    "small_pause": 0.71,
+}
+
+
+def _sequence_signature(actions: list[PendingAction]) -> tuple[float, ...]:
+    """Compact numeric signature used to avoid near-identical idle sequences."""
+    if not actions:
+        return ()
+    total_duration = sum(action.duration for action in actions)
+    mean_yaw = sum(action.target_yaw for action in actions) / len(actions)
+    mean_pitch = sum(action.target_pitch for action in actions) / len(actions)
+    mean_z = sum(action.target_z for action in actions) / len(actions)
+    max_yaw = max(abs(action.target_yaw) for action in actions)
+    max_pitch = max(abs(action.target_pitch) for action in actions)
+    max_z = max(abs(action.target_z) for action in actions)
+    order = tuple(_IDLE_PRIMITIVE_CODES.get(action.name.rsplit("_", 1)[0].removeprefix("idle_generated_"), 0.0) for action in actions[:8])
+    return (
+        len(actions) / 8.0,
+        total_duration / 12.0,
+        mean_yaw / math.radians(28.0),
+        mean_pitch / math.radians(14.0),
+        mean_z / 0.014,
+        max_yaw / math.radians(28.0),
+        max_pitch / math.radians(14.0),
+        max_z / 0.014,
+        *order,
+    )
+
+
+def _signature_distance(candidate: tuple[float, ...], previous: tuple[float, ...] | None) -> float:
+    if previous is None:
+        return 1.0
+    length = min(len(candidate), len(previous))
+    if length == 0:
+        return 1.0
+    return sum(min(1.0, abs(candidate[i] - previous[i])) for i in range(length)) / length
+
+
 def _generated_distance(candidate: tuple[float, ...], previous: tuple[float, ...] | None) -> float:
     if previous is None:
         return 1.0
@@ -447,16 +497,46 @@ def build_generated_idle_action_sequence(
     last_signature: tuple[float, ...] | None = None,
 ) -> tuple[list[PendingAction], tuple[float, ...]]:
     """Generate a multi-step idle action sequence from fresh runtime parameters."""
-    action, signature = build_generated_idle_pending_action(
+    best_actions = None
+    best_signature = None
+    best_distance = -1.0
+    for _ in range(8):
+        actions, signature = _build_generated_idle_action_sequence_once(
+            config,
+            last_yaw_rad=last_yaw_rad,
+            last_signature=last_signature,
+        )
+        distance = _signature_distance(signature, last_signature)
+        if distance >= config.min_repeat_distance:
+            return actions, signature
+        if distance > best_distance:
+            best_actions = actions
+            best_signature = signature
+            best_distance = distance
+
+    assert best_actions is not None and best_signature is not None
+    return best_actions, best_signature
+
+
+def _build_generated_idle_action_sequence_once(
+    config: IdleGenerationConfig,
+    *,
+    last_yaw_rad: float = 0.0,
+    last_signature: tuple[float, ...] | None = None,
+) -> tuple[list[PendingAction], tuple[float, ...]]:
+    """Generate one candidate idle sequence."""
+    action, _signature = build_generated_idle_pending_action(
         config,
         last_yaw_rad=last_yaw_rad,
-        last_signature=last_signature,
+        last_signature=None,
     )
-    step_count = random.randint(5, 7)
+    step_count = random.randint(5, 8)
     durations = _split_sequence_duration(action.duration, step_count)
     yaw_sign = 1.0 if action.target_yaw >= 0.0 else -1.0
+    side_name = "look_right" if yaw_sign > 0.0 else "look_left"
+    opposite_name = "look_left" if yaw_sign > 0.0 else "look_right"
     side_yaw = math.copysign(
-        max(abs(action.target_yaw), math.radians(random.uniform(10.0, 24.0))),
+        max(abs(action.target_yaw), math.radians(random.uniform(9.0, 26.0))),
         yaw_sign,
     )
     opposite_yaw = -side_yaw * random.uniform(0.35, 0.8)
@@ -468,7 +548,7 @@ def build_generated_idle_action_sequence(
 
     primitives = [
         (
-            "look_side",
+            side_name,
             side_yaw,
             action.target_pitch * random.uniform(0.35, 0.75),
             side_roll,
@@ -478,7 +558,7 @@ def build_generated_idle_action_sequence(
         ),
         (
             "look_up",
-            side_yaw * random.uniform(0.45, 0.85),
+            side_yaw * random.uniform(-0.25, 0.55),
             up_pitch,
             action.target_roll * random.uniform(0.35, 0.75),
             action.target_x * random.uniform(0.4, 1.0),
@@ -487,7 +567,7 @@ def build_generated_idle_action_sequence(
         ),
         (
             "stretch_neck",
-            side_yaw + math.radians(random.uniform(-4.0, 4.0)),
+            side_yaw * random.uniform(-0.15, 0.65) + math.radians(random.uniform(-4.0, 4.0)),
             random.uniform(math.radians(-4.0), math.radians(3.0)),
             action.target_roll * random.uniform(0.5, 1.0),
             action.target_x,
@@ -496,7 +576,7 @@ def build_generated_idle_action_sequence(
         ),
         (
             "look_down",
-            side_yaw * random.uniform(0.4, 0.75),
+            side_yaw * random.uniform(-0.2, 0.45),
             down_pitch,
             -side_roll * random.uniform(0.3, 0.8),
             action.target_x * random.uniform(0.15, 0.55),
@@ -513,7 +593,7 @@ def build_generated_idle_action_sequence(
             tuck_z,
         ),
         (
-            "look_opposite",
+            opposite_name,
             opposite_yaw,
             random.choice((up_pitch, down_pitch)) * random.uniform(0.25, 0.65),
             -side_roll * random.uniform(0.35, 0.8),
@@ -530,19 +610,64 @@ def build_generated_idle_action_sequence(
             action.target_y * random.uniform(0.05, 0.25),
             random.uniform(-0.001, 0.003),
         ),
+        (
+            "look_up_side",
+            side_yaw * random.uniform(0.55, 1.0),
+            up_pitch * random.uniform(0.45, 0.9),
+            side_roll * random.uniform(0.25, 0.75),
+            action.target_x * random.uniform(0.15, 0.7),
+            action.target_y * random.uniform(0.15, 0.7),
+            random.uniform(0.003, 0.01),
+        ),
+        (
+            "look_down_side",
+            opposite_yaw * random.uniform(0.35, 0.9),
+            down_pitch * random.uniform(0.45, 0.95),
+            -side_roll * random.uniform(0.25, 0.75),
+            -action.target_x * random.uniform(0.15, 0.7),
+            -action.target_y * random.uniform(0.15, 0.7),
+            random.uniform(-0.004, 0.001),
+        ),
+        (
+            "tilt_head",
+            side_yaw * random.uniform(-0.2, 0.35),
+            action.target_pitch * random.uniform(0.2, 0.5),
+            side_roll * random.uniform(0.75, 1.2),
+            action.target_x * random.uniform(0.05, 0.3),
+            action.target_y * random.uniform(0.05, 0.3),
+            random.uniform(-0.001, 0.003),
+        ),
+        (
+            "small_pause",
+            action.target_yaw * random.uniform(0.15, 0.35),
+            action.target_pitch * random.uniform(0.1, 0.25),
+            action.target_roll * random.uniform(0.1, 0.25),
+            action.target_x * random.uniform(0.05, 0.18),
+            action.target_y * random.uniform(0.05, 0.18),
+            action.target_z * random.uniform(0.05, 0.18),
+        ),
     ]
 
-    upper_pair = [primitives[1], primitives[2]]
-    lower_pair = [primitives[3], primitives[4]]
-    if random.random() < 0.45:
-        upper_pair.reverse()
-    if random.random() < 0.45:
-        lower_pair.reverse()
-
-    selected = [primitives[0], *upper_pair, *lower_pair]
-    optional = [primitives[5], primitives[6]]
+    by_name = {primitive[0]: primitive for primitive in primitives}
+    selected = [
+        by_name[side_name],
+        by_name["look_up"],
+        by_name["stretch_neck"],
+        by_name["look_down"],
+        by_name["tuck_neck"],
+    ]
+    optional_names = ["look_up", "look_down", "look_up_side", "look_down_side", opposite_name, "settle_glance", "tilt_head", "small_pause"]
+    optional = [by_name[name] for name in optional_names if by_name[name] not in selected]
     random.shuffle(optional)
     selected.extend(optional[: max(0, step_count - len(selected))])
+    anchor = selected[0]
+    middle = selected[1:]
+    random.shuffle(middle)
+    if random.random() < 0.65:
+        selected = [anchor, *middle]
+    else:
+        insert_at = random.randint(0, min(2, len(middle)))
+        selected = [*middle[:insert_at], anchor, *middle[insert_at:]]
     selected = selected[:step_count]
 
     actions = []
@@ -559,4 +684,4 @@ def build_generated_idle_action_sequence(
                 duration=durations[index],
             )
         )
-    return actions, signature
+    return actions, _sequence_signature(actions)

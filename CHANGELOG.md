@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.29] - 2026-04-24
+
+### Changed
+- Make realtime idle sequences less repetitive with a constrained random action grammar, 5-8 generated steps, and broader left/right/up/down/stretch/tuck/tilt/pause combinations.
+- Retune idle breathing for visible motion with a mechanical-friendly up/hold/down/hold curve, slightly larger Z travel, slower frequency, and a small pitch component.
+- Increase the thinking animation head amplitudes so the processing state reads more clearly.
+- Restore idle breathing immediately while TTS completion recentering runs, instead of waiting for the delayed idle return.
+- Smooth manual idle enable/disable transitions so head and antenna targets ease into neutral/rest poses.
+- Stabilize wakeup DOA turning by sampling a short DOA window and using the median yaw before turning.
+
 ## [1.0.28] - 2026-04-24
 
 ### Fixed

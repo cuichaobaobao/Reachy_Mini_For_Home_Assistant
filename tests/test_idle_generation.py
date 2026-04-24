@@ -24,7 +24,7 @@ class IdleGenerationTests(unittest.TestCase):
             y_range_m=(-0.004, 0.004),
             z_range_m=(-0.006, 0.014),
             antenna_variation_range_rad=(-0.06, 0.06),
-            duration_range_s=(7.0, 10.5),
+            duration_range_s=(7.5, 12.0),
             hold_range_s=(1.0, 2.0),
             return_duration_range_s=(2.2, 3.4),
             fade_out_duration_range_s=(0.35, 0.65),
@@ -36,8 +36,8 @@ class IdleGenerationTests(unittest.TestCase):
     def test_generated_idle_is_slow_visible_and_uses_official_neutral_antennas(self):
         action, signature = build_generated_idle_pending_action(self._config())
 
-        self.assertGreaterEqual(action.duration, 7.0)
-        self.assertLessEqual(action.duration, 10.5)
+        self.assertGreaterEqual(action.duration, 7.5)
+        self.assertLessEqual(action.duration, 12.0)
         self.assertAlmostEqual(action.target_antenna_left, OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD)
         self.assertAlmostEqual(action.target_antenna_right, OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD)
         self.assertAlmostEqual(signature[6], action.target_antenna_left)
@@ -55,10 +55,10 @@ class IdleGenerationTests(unittest.TestCase):
         actions, _ = build_generated_idle_action_sequence(self._config())
 
         self.assertGreaterEqual(len(actions), 5)
-        self.assertLessEqual(len(actions), 7)
+        self.assertLessEqual(len(actions), 8)
         self.assertTrue(all(action.name.startswith("idle_generated_") for action in actions))
-        self.assertGreaterEqual(sum(action.duration for action in actions), 7.0)
-        self.assertLessEqual(sum(action.duration for action in actions), 10.5)
+        self.assertGreaterEqual(sum(action.duration for action in actions), 7.5)
+        self.assertLessEqual(sum(action.duration for action in actions), 12.0)
         self.assertTrue(any(abs(action.target_yaw) > 0.15 for action in actions))
         self.assertTrue(any(action.target_pitch < -0.07 for action in actions))
         self.assertTrue(any(action.target_pitch > 0.07 for action in actions))

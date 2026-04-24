@@ -222,12 +222,12 @@ class MovementManager:
             roll_range_deg=(-6.0, 6.0),
             x_range_m=(-0.002, 0.002),
             y_range_m=(-0.002, 0.002),
-            z_range_m=(-0.002, 0.006),
+            z_range_m=(-0.006, 0.014),
             antenna_variation_range_rad=(-0.06, 0.06),
-            duration_range_s=(2.2, 4.2),
-            hold_range_s=(0.35, 0.9),
-            return_duration_range_s=(1.0, 1.8),
-            fade_out_duration_range_s=(0.55, 0.85),
+            duration_range_s=(7.5, 12.0),
+            hold_range_s=(1.0, 2.0),
+            return_duration_range_s=(2.2, 3.4),
+            fade_out_duration_range_s=(0.35, 0.65),
             opposite_direction_bias=0.68,
             micro_motion_probability=0.05,
             min_repeat_distance=0.35,
@@ -784,14 +784,23 @@ class MovementManager:
     def _update_animation(self, dt: float) -> None:
         """Update animation offsets from AnimationPlayer."""
         dt_safe = max(0.0, min(dt, MAX_CONTROL_DT_S))
+        idle_transition_action_active = (
+            self.state.robot_state == RobotState.IDLE
+            and self._pending_action is not None
+            and self._pending_action.name == "idle_enable_neutral"
+        )
         idle_queue_action_active = (
             self.state.robot_state == RobotState.IDLE
-            and self.state.look_around_in_progress
+            and (
+                idle_transition_action_active
+                or self.state.look_around_in_progress
+            )
             and (
                 (
                     self._pending_action is not None
                     and self._pending_action.name.startswith(("idle_action", "idle_generated"))
                 )
+                or idle_transition_action_active
                 or len(self._idle_action_queue) > 0
             )
         )

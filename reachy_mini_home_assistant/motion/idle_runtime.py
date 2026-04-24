@@ -27,19 +27,45 @@ def apply_idle_behavior_enabled(manager: MovementManager, enabled: bool) -> None
     manager._idle_generated_motion_enabled = enabled
 
     if not enabled:
+        fold_animation_offsets_into_targets(manager)
         clear_idle_activity(manager)
         clear_idle_animation(manager)
         manager.state.anim_antenna_left = 0.0
         manager.state.anim_antenna_right = 0.0
         if manager.state.robot_state == RobotState.IDLE:
-            transition_or_apply_idle_rest_pose(manager)
+            transition_or_apply_idle_rest_pose(manager, duration=2.4)
     elif manager.state.robot_state == RobotState.IDLE:
+        clear_idle_activity(manager)
         manager._animation_player.set_animation("idle")
-        manager.state.target_pitch = 0.0
-        manager.state.target_antenna_left = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD
-        manager.state.target_antenna_right = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD
+        manager._idle_action_animation_suppression = 1.0
+        manager._start_action(
+            PendingAction(
+                name="idle_enable_neutral",
+                target_pitch=0.0,
+                target_yaw=0.0,
+                target_roll=0.0,
+                target_x=0.0,
+                target_y=0.0,
+                target_z=0.0,
+                target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+                target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
+                duration=1.8,
+            )
+        )
 
     logger.info("Idle behavior %s", "enabled" if enabled else "disabled")
+
+
+def fold_animation_offsets_into_targets(manager: MovementManager) -> None:
+    """Preserve the visible pose before disabling additive idle animation."""
+    manager.state.target_pitch += manager.state.anim_pitch
+    manager.state.target_yaw += manager.state.anim_yaw
+    manager.state.target_roll += manager.state.anim_roll
+    manager.state.target_x += manager.state.anim_x
+    manager.state.target_y += manager.state.anim_y
+    manager.state.target_z += manager.state.anim_z
+    manager.state.target_antenna_left += manager.state.anim_antenna_left
+    manager.state.target_antenna_right += manager.state.anim_antenna_right
 
 
 def apply_idle_rest_pose(manager: MovementManager) -> None:

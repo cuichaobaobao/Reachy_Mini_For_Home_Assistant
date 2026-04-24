@@ -1,13 +1,14 @@
 {
   "animations": {
     "idle": {
-      "description": "Official Reachy Mini breathing animation for idle state",
-      "z_amplitude_m": 0.005,
-      "z_frequency_hz": 0.1,
+      "description": "Visible mechanical-friendly breathing animation for idle state",
+      "pitch_amplitude_rad": 0.025,
+      "z_amplitude_m": 0.0065,
+      "z_frequency_hz": 0.08,
       "antenna_amplitude_rad": 0.2617993877991494,
       "antenna_move_name": "wiggle",
       "antenna_frequency_hz": 0.5,
-      "frequency_hz": 0.1
+      "frequency_hz": 0.08
     },
     "listening": {
       "description": "Attentive pose while listening to user",
@@ -21,10 +22,10 @@
     },
     "thinking": {
       "description": "Processing/thinking animation - head tilts side to side",
-      "pitch_amplitude_rad": 0.06,
-      "yaw_amplitude_rad": 0.1,
-      "roll_amplitude_rad": 0.04,
-      "z_amplitude_m": 0.005,
+      "pitch_amplitude_rad": 0.08,
+      "yaw_amplitude_rad": 0.15,
+      "roll_amplitude_rad": 0.06,
+      "z_amplitude_m": 0.007,
       "antenna_amplitude_rad": 0.35,
       "antenna_move_name": "wiggle",
       "antenna_frequency_hz": 0.34,
@@ -697,7 +698,7 @@
     }
   },
   "idle_generated_motion": {
-    "description": "Realtime generated idle sequences. Each trigger samples a fresh 5-7 step pose sequence from side look, up, stretch, down, tuck, opposite look, and settle-glance primitives, then returns to breathing neutral.",
+    "description": "Realtime generated idle sequences. Each trigger samples a fresh 5-8 step pose sequence from a constrained random action grammar, then returns to breathing neutral.",
     "min_interval_s": 3,
     "max_interval_s": 15,
     "trigger_probability": 1,
@@ -730,8 +731,8 @@
       0.06
     ],
     "duration_range_s": [
-      7,
-      10.5
+      7.5,
+      12
     ],
     "hold_range_s": [
       1,

@@ -92,7 +92,8 @@ class MotionTimingSourceTests(unittest.TestCase):
 
         self.assertIn('protocol._run_motion_state("conversation_finished", "on_conversation_finished")', session_flow)
         self.assertIn("def on_conversation_finished", reachy_motion)
-        self.assertIn("reset_yaw_to_neutral(duration=1.2)", reachy_motion)
+        self.assertIn("reset_to_neutral(duration=1.2)", reachy_motion)
+        self.assertIn("recentering while restoring idle breathing", reachy_motion)
         self.assertIn("if not self._movement_manager._manual_head_yaw_hold", reachy_motion)
 
 
