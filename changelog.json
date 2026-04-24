@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.19",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.19",
+      "Fix: Remove the idle antenna smoothing layer so breathing antenna sway follows the official 15 degree, 0.5Hz timing directly",
+      "Change: Keep idle breathing aligned with the official Reachy Mini conversation app parameters without extra output filtering"
+    ]
+  },
+  {
     "version": "1.0.18",
     "date": "2026-04-24",
     "changes": [

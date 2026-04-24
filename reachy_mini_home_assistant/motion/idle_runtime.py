@@ -31,8 +31,6 @@ def apply_idle_behavior_enabled(manager: "MovementManager", enabled: bool) -> No
         clear_idle_animation(manager)
         manager.state.anim_antenna_left = 0.0
         manager.state.anim_antenna_right = 0.0
-        manager._idle_antenna_smoothed = None
-        manager._last_idle_antenna_update = 0.0
         if manager.state.robot_state == RobotState.IDLE:
             transition_or_apply_idle_rest_pose(manager)
     elif manager.state.robot_state == RobotState.IDLE:

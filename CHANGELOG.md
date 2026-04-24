@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.19] - 2026-04-24
+
+### Changed
+- Keep idle breathing aligned with the official Reachy Mini conversation app parameters without adding an extra output smoothing layer.
+
+### Fixed
+- Remove idle antenna output smoothing so the antenna breathing sway follows the official 15 degree, 0.5Hz timing directly.
+
 ## [1.0.18] - 2026-04-24
 
 ### Fixed

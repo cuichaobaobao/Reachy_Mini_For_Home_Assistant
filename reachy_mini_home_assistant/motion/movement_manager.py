@@ -179,11 +179,6 @@ class MovementManager:
         self._last_sent_body_yaw: float | None = None
         self._last_send_time = 0.0
 
-        # Idle antenna smoothing state
-        self._idle_antenna_smoothed: tuple[float, float] | None = None
-        self._last_idle_antenna_update = 0.0
-        self._idle_antenna_smoothing_tau_s = 0.12
-
         # Command send pacing (separate from control loop frequency)
         control_rate = max(1.0, float(Config.motion.control_rate_hz or DEFAULT_CONTROL_LOOP_FREQUENCY_HZ))
         self._control_loop_hz = control_rate

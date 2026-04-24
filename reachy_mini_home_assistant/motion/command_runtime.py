@@ -59,8 +59,6 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
         if payload == RobotState.IDLE and old_state != RobotState.IDLE:
             manager.state.idle_start_time = manager._now()
             manager._start_antenna_unfreeze()
-            manager._idle_antenna_smoothed = None
-            manager._last_idle_antenna_update = 0.0
 
         if payload != RobotState.IDLE:
             # Preserve the current pose anchor during an active conversation.
@@ -92,8 +90,6 @@ def handle_command(manager: "MovementManager", cmd: str, payload: Any) -> None:
                     )
                     start_action(manager, action)
                 manager._antenna_controller.reset()
-            manager._idle_antenna_smoothed = None
-            manager._last_idle_antenna_update = 0.0
 
         logger.debug("State changed: %s -> %s, animation: %s", old_state.value, payload.value, animation_name)
         return
