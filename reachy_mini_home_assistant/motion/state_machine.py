@@ -143,9 +143,11 @@ class IdleGenerationConfig:
     x_range_m: tuple[float, float]
     y_range_m: tuple[float, float]
     z_range_m: tuple[float, float]
+    antenna_variation_range_rad: tuple[float, float]
     duration_range_s: tuple[float, float]
     opposite_direction_bias: float
     micro_motion_probability: float
+    min_repeat_distance: float
 
 
 def parse_numeric_range(value: Any, default_min: float, default_max: float) -> tuple[float, float]:
@@ -204,10 +206,12 @@ def load_idle_behavior_config(
         roll_range_deg=(-6.0, 6.0),
         x_range_m=(-0.002, 0.002),
         y_range_m=(-0.002, 0.002),
-        z_range_m=(-0.002, 0.003),
-        duration_range_s=(max(0.2, default_duration_s * 0.55), max(0.2, default_duration_s * 1.25)),
+        z_range_m=(-0.003, 0.006),
+        antenna_variation_range_rad=(-0.06, 0.06),
+        duration_range_s=(3.0, 6.0),
         opposite_direction_bias=0.68,
-        micro_motion_probability=0.18,
+        micro_motion_probability=0.05,
+        min_repeat_distance=0.35,
     )
 
     if not config_path.exists():
@@ -270,12 +274,14 @@ def load_idle_behavior_config(
         roll_range_deg=parse_numeric_range(section.get("roll_range_deg"), -6.0, 6.0),
         x_range_m=parse_numeric_range(section.get("x_range_m"), -0.002, 0.002),
         y_range_m=parse_numeric_range(section.get("y_range_m"), -0.002, 0.002),
-        z_range_m=parse_numeric_range(section.get("z_range_m"), -0.002, 0.003),
+        z_range_m=parse_numeric_range(section.get("z_range_m"), -0.003, 0.006),
+        antenna_variation_range_rad=parse_numeric_range(section.get("antenna_variation_range_rad"), -0.06, 0.06),
         duration_range_s=parse_numeric_range(
-            section.get("duration_range_s"), max(0.2, default_duration_s * 0.55), max(0.2, default_duration_s * 1.25)
+            section.get("duration_range_s"), 3.0, 6.0
         ),
         opposite_direction_bias=parse_probability(section.get("opposite_direction_bias"), 0.68),
-        micro_motion_probability=parse_probability(section.get("micro_motion_probability"), 0.18),
+        micro_motion_probability=parse_probability(section.get("micro_motion_probability"), 0.05),
+        min_repeat_distance=parse_probability(section.get("min_repeat_distance"), 0.35),
     )
 
     return IdleBehaviorConfig(rest_pose, min_interval_s, max_interval_s, trigger_probability, generation)
@@ -291,13 +297,17 @@ def _sample_biased_yaw(config: IdleGenerationConfig, last_yaw_rad: float) -> flo
     return math.radians(random.uniform(float(yaw_min), float(yaw_max)))
 
 
-def build_generated_idle_pending_action(config: IdleGenerationConfig, *, last_yaw_rad: float = 0.0) -> PendingAction:
-    """Generate one idle action from ranges at runtime."""
+def _sample_generated_idle_values(
+    config: IdleGenerationConfig,
+    *,
+    last_yaw_rad: float,
+) -> tuple[float, float, float, float, float, float, float, float, float, float]:
     pitch_min, pitch_max = config.pitch_range_deg
     roll_min, roll_max = config.roll_range_deg
     x_min, x_max = config.x_range_m
     y_min, y_max = config.y_range_m
     z_min, z_max = config.z_range_m
+    antenna_min, antenna_max = config.antenna_variation_range_rad
     duration_min, duration_max = config.duration_range_s
 
     yaw = _sample_biased_yaw(config, last_yaw_rad)
@@ -306,6 +316,11 @@ def build_generated_idle_pending_action(config: IdleGenerationConfig, *, last_ya
     x = random.uniform(float(x_min), float(x_max))
     y = random.uniform(float(y_min), float(y_max))
     z = random.uniform(float(z_min), float(z_max))
+    antenna_left = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD + random.uniform(float(antenna_min), float(antenna_max))
+    antenna_right = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD + random.uniform(float(antenna_min), float(antenna_max))
+    antenna_left = max(math.radians(6.0), antenna_left)
+    antenna_right = min(-math.radians(6.0), antenna_right)
+    duration = max(1.5, random.uniform(float(duration_min), float(duration_max)))
 
     if random.random() < config.micro_motion_probability:
         yaw *= 0.35
@@ -314,10 +329,54 @@ def build_generated_idle_pending_action(config: IdleGenerationConfig, *, last_ya
         x *= 0.4
         y *= 0.4
         z *= 0.4
+        duration = max(duration, 2.4)
 
     if abs(yaw) < math.radians(1.5) and abs(pitch) < math.radians(1.0) and abs(roll) < math.radians(1.0):
         yaw = math.copysign(math.radians(random.uniform(2.5, 6.0)), yaw or random.choice((-1.0, 1.0)))
 
+    return yaw, pitch, roll, x, y, z, antenna_left, antenna_right, duration, random.random()
+
+
+def _generated_distance(candidate: tuple[float, ...], previous: tuple[float, ...] | None) -> float:
+    if previous is None:
+        return 1.0
+    yaw, pitch, roll, x, y, z, antenna_left, antenna_right, duration, _ = candidate
+    last_yaw, last_pitch, last_roll, last_x, last_y, last_z, last_left, last_right, last_duration, _ = previous
+    parts = (
+        min(1.0, abs(yaw - last_yaw) / math.radians(18.0)),
+        min(1.0, abs(pitch - last_pitch) / math.radians(8.0)),
+        min(1.0, abs(roll - last_roll) / math.radians(8.0)),
+        min(1.0, abs(x - last_x) / 0.003),
+        min(1.0, abs(y - last_y) / 0.003),
+        min(1.0, abs(z - last_z) / 0.006),
+        min(1.0, abs(antenna_left - last_left) / 0.08),
+        min(1.0, abs(antenna_right - last_right) / 0.08),
+        min(1.0, abs(duration - last_duration) / 2.0),
+    )
+    return sum(parts) / len(parts)
+
+
+def build_generated_idle_pending_action(
+    config: IdleGenerationConfig,
+    *,
+    last_yaw_rad: float = 0.0,
+    last_signature: tuple[float, ...] | None = None,
+) -> tuple[PendingAction, tuple[float, ...]]:
+    """Generate one idle action from fresh sampled ranges at runtime."""
+    best = None
+    best_distance = -1.0
+    for _ in range(10):
+        candidate = _sample_generated_idle_values(config, last_yaw_rad=last_yaw_rad)
+        distance = _generated_distance(candidate, last_signature)
+        if distance >= config.min_repeat_distance:
+            best = candidate
+            break
+        if distance > best_distance:
+            best = candidate
+            best_distance = distance
+
+    assert best is not None
+    yaw, pitch, roll, x, y, z, antenna_left, antenna_right, duration, _ = best
     return PendingAction(
         name="idle_generated",
         target_yaw=yaw,
@@ -326,5 +385,7 @@ def build_generated_idle_pending_action(config: IdleGenerationConfig, *, last_ya
         target_x=x,
         target_y=y,
         target_z=z,
-        duration=max(0.2, random.uniform(float(duration_min), float(duration_max))),
-    )
+        target_antenna_left=antenna_left,
+        target_antenna_right=antenna_right,
+        duration=duration,
+    ), best

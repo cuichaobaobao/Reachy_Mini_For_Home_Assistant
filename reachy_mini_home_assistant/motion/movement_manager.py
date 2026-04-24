@@ -49,15 +49,15 @@ from .idle_runtime import (
     update_idle_look_around,
 )
 from .state_machine import (
-    IdleGenerationConfig,
-    load_idle_behavior_config,
-    MovementState,
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
     OFFICIAL_NEUTRAL_ANTENNA_SDK_LEFT_RAD,
     OFFICIAL_NEUTRAL_ANTENNA_SDK_RIGHT_RAD,
+    IdleGenerationConfig,
+    MovementState,
     PendingAction,
     RobotState,
+    load_idle_behavior_config,
 )
 
 if TYPE_CHECKING:
@@ -224,12 +224,15 @@ class MovementManager:
             roll_range_deg=(-6.0, 6.0),
             x_range_m=(-0.002, 0.002),
             y_range_m=(-0.002, 0.002),
-            z_range_m=(-0.002, 0.003),
-            duration_range_s=(1.1, 2.5),
+            z_range_m=(-0.003, 0.006),
+            antenna_variation_range_rad=(-0.06, 0.06),
+            duration_range_s=(3.0, 6.0),
             opposite_direction_bias=0.68,
-            micro_motion_probability=0.18,
+            micro_motion_probability=0.05,
+            min_repeat_distance=0.35,
         )
         self._last_idle_generated_yaw = 0.0
+        self._last_idle_generated_signature: tuple[float, ...] | None = None
         self._load_idle_generated_motion_config()
 
         # Antenna controller (handles freeze/unfreeze for listening mode)

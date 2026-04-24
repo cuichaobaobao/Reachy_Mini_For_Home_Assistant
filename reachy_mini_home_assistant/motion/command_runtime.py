@@ -7,6 +7,8 @@ import math
 from queue import Empty
 from typing import TYPE_CHECKING, Any
 
+from scipy.spatial.transform import Rotation as R
+
 from .emotion_moves import EmotionMove, is_emotion_available
 from .state_machine import (
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
@@ -187,7 +189,29 @@ def start_emotion_move(manager: "MovementManager", emotion_name: str) -> None:
 def start_action(manager: "MovementManager", action: PendingAction) -> None:
     manager._pending_action = action
     manager._action_start_time = manager._now()
-    manager._action_start_pose = {
+    start_pose = None
+    if action.name.startswith("idle_generated") and manager._last_sent_head_pose is not None:
+        try:
+            rotation = R.from_matrix(manager._last_sent_head_pose[:3, :3])
+            roll, pitch, yaw = rotation.as_euler("xyz")
+            start_pose = {
+                "pitch": float(pitch),
+                "yaw": float(yaw),
+                "roll": float(roll),
+                "x": float(manager._last_sent_head_pose[0, 3]),
+                "y": float(manager._last_sent_head_pose[1, 3]),
+                "z": float(manager._last_sent_head_pose[2, 3]),
+                "antenna_left": manager.state.target_antenna_left,
+                "antenna_right": manager.state.target_antenna_right,
+            }
+            if manager._last_sent_antennas is not None:
+                # Internal target order is local left/right; SDK command order is right/left.
+                start_pose["antenna_left"] = float(manager._last_sent_antennas[1])
+                start_pose["antenna_right"] = float(manager._last_sent_antennas[0])
+        except Exception as e:
+            logger.debug("Falling back to target-state start pose for %s: %s", action.name, e)
+
+    manager._action_start_pose = start_pose or {
         "pitch": manager.state.target_pitch,
         "yaw": manager.state.target_yaw,
         "roll": manager.state.target_roll,

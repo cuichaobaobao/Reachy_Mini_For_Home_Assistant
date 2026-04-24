@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.21] - 2026-04-24
+
+### Changed
+- Make realtime generated idle motions slower, more visible, and less repetitive by sampling broader pose ranges and remembering the previous generated signature.
+- Restore light speaking antenna sway while keeping TTS head motion driven by `SpeechSwayRT`.
+
+### Fixed
+- Start generated idle handoffs from the last commanded breathing pose and antenna positions instead of stale target state.
+- Keep generated idle antenna targets around the official +/-10 degree neutral instead of pulling them toward zero.
+
 ## [1.0.20] - 2026-04-24
 
 ### Changed

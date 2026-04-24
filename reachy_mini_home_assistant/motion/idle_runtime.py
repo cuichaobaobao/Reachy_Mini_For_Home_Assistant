@@ -68,6 +68,7 @@ def clear_idle_activity(manager: "MovementManager") -> None:
     manager.state.look_around_in_progress = False
     manager._idle_action_queue.clear()
     manager._last_idle_generated_yaw = 0.0
+    manager._last_idle_generated_signature = None
     if manager._pending_action and manager._pending_action.name.startswith(("idle_action", "idle_generated")):
         manager._pending_action = None
 
@@ -133,11 +134,13 @@ def update_idle_look_around(
             schedule_next_idle_action_time(manager, now)
             return
 
-        idle_action = build_generated_idle_pending_action(
+        idle_action, signature = build_generated_idle_pending_action(
             manager._idle_generation_config,
             last_yaw_rad=manager._last_idle_generated_yaw,
+            last_signature=manager._last_idle_generated_signature,
         )
         manager._last_idle_generated_yaw = idle_action.target_yaw
+        manager._last_idle_generated_signature = signature
         manager._idle_action_queue.append(idle_action)
         manager.state.look_around_in_progress = True
         queued_duration = sum(max(0.0, float(item.duration)) for item in manager._idle_action_queue)

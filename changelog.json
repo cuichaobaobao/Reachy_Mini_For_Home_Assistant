@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.21",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.21",
+      "Change: Make realtime generated idle motions slower, more visible, and less repetitive with remembered parameter signatures",
+      "Fix: Start generated idle handoffs from the last commanded breathing pose and antenna positions instead of stale target state",
+      "Fix: Keep generated idle antenna targets around the official +/-10 degree neutral instead of pulling them toward zero",
+      "Change: Restore light speaking antenna sway while keeping TTS head motion driven by SpeechSwayRT"
+    ]
+  },
+  {
     "version": "1.0.20",
     "date": "2026-04-24",
     "changes": [
