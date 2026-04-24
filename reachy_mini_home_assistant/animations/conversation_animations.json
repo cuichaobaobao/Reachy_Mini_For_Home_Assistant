@@ -697,7 +697,7 @@
     }
   },
   "idle_generated_motion": {
-    "description": "Realtime generated idle sequences. Each trigger samples a fresh 4-6 step pose sequence from look, stretch, tuck, up, down, and side-glance primitives, then returns to breathing neutral.",
+    "description": "Realtime generated idle sequences. Each trigger samples a fresh 5-7 step pose sequence from side look, up, stretch, down, tuck, opposite look, and settle-glance primitives, then returns to breathing neutral.",
     "min_interval_s": 3,
     "max_interval_s": 15,
     "trigger_probability": 1,
@@ -730,20 +730,20 @@
       0.06
     ],
     "duration_range_s": [
-      5.8,
-      8.6
+      7,
+      10.5
     ],
     "hold_range_s": [
-      0.8,
-      1.6
+      1,
+      2
     ],
     "return_duration_range_s": [
-      1.8,
-      2.8
+      2.2,
+      3.4
     ],
     "fade_out_duration_range_s": [
-      0.25,
-      0.45
+      0.35,
+      0.65
     ],
     "opposite_direction_bias": 0.68,
     "micro_motion_probability": 0.05,

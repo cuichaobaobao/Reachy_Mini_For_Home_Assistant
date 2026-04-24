@@ -211,10 +211,10 @@ def load_idle_behavior_config(
         y_range_m=(-0.002, 0.002),
         z_range_m=(-0.006, 0.014),
         antenna_variation_range_rad=(-0.06, 0.06),
-        duration_range_s=(5.8, 8.6),
-        hold_range_s=(0.8, 1.6),
-        return_duration_range_s=(1.8, 2.8),
-        fade_out_duration_range_s=(0.25, 0.45),
+        duration_range_s=(7.0, 10.5),
+        hold_range_s=(1.0, 2.0),
+        return_duration_range_s=(2.2, 3.4),
+        fade_out_duration_range_s=(0.35, 0.65),
         opposite_direction_bias=0.68,
         micro_motion_probability=0.05,
         min_repeat_distance=0.35,
@@ -280,19 +280,19 @@ def load_idle_behavior_config(
         roll_range_deg=parse_numeric_range(section.get("roll_range_deg"), -6.0, 6.0),
         x_range_m=parse_numeric_range(section.get("x_range_m"), -0.002, 0.002),
         y_range_m=parse_numeric_range(section.get("y_range_m"), -0.002, 0.002),
-        z_range_m=parse_numeric_range(section.get("z_range_m"), -0.002, 0.006),
+        z_range_m=parse_numeric_range(section.get("z_range_m"), -0.006, 0.014),
         antenna_variation_range_rad=parse_numeric_range(section.get("antenna_variation_range_rad"), -0.06, 0.06),
         duration_range_s=parse_numeric_range(
-            section.get("duration_range_s"), 2.2, 4.2
+            section.get("duration_range_s"), 7.0, 10.5
         ),
         hold_range_s=parse_numeric_range(
-            section.get("hold_range_s"), 0.35, 0.9
+            section.get("hold_range_s"), 1.0, 2.0
         ),
         return_duration_range_s=parse_numeric_range(
-            section.get("return_duration_range_s"), 1.0, 1.8
+            section.get("return_duration_range_s"), 2.2, 3.4
         ),
         fade_out_duration_range_s=parse_numeric_range(
-            section.get("fade_out_duration_range_s"), 0.55, 0.85
+            section.get("fade_out_duration_range_s"), 0.35, 0.65
         ),
         opposite_direction_bias=parse_probability(section.get("opposite_direction_bias"), 0.68),
         micro_motion_probability=parse_probability(section.get("micro_motion_probability"), 0.05),
@@ -353,7 +353,7 @@ def _split_sequence_duration(total_duration: float, step_count: int) -> list[flo
     """Split a generated idle movement into several slow, visible segments."""
     weights = [random.uniform(0.85, 1.35) for _ in range(max(1, step_count))]
     total_weight = sum(weights)
-    duration = max(5.0, total_duration)
+    duration = max(6.5, total_duration)
     return [duration * weight / total_weight for weight in weights]
 
 
@@ -452,7 +452,7 @@ def build_generated_idle_action_sequence(
         last_yaw_rad=last_yaw_rad,
         last_signature=last_signature,
     )
-    step_count = random.randint(4, 6)
+    step_count = random.randint(5, 7)
     durations = _split_sequence_duration(action.duration, step_count)
     yaw_sign = 1.0 if action.target_yaw >= 0.0 else -1.0
     side_yaw = math.copysign(
@@ -460,8 +460,8 @@ def build_generated_idle_action_sequence(
         yaw_sign,
     )
     opposite_yaw = -side_yaw * random.uniform(0.35, 0.8)
-    up_pitch = -abs(random.uniform(math.radians(5.0), math.radians(12.0)))
-    down_pitch = abs(random.uniform(math.radians(5.0), math.radians(13.0)))
+    up_pitch = -abs(random.uniform(math.radians(7.0), math.radians(13.0)))
+    down_pitch = abs(random.uniform(math.radians(7.0), math.radians(14.0)))
     stretch_z = max(action.target_z, random.uniform(0.008, 0.014))
     tuck_z = random.uniform(-0.006, -0.002)
     side_roll = yaw_sign * abs(random.uniform(math.radians(1.5), math.radians(7.0)))
@@ -532,14 +532,17 @@ def build_generated_idle_action_sequence(
         ),
     ]
 
-    mandatory = [primitives[0], random.choice((primitives[1], primitives[2])), random.choice((primitives[3], primitives[4]))]
-    remaining = [primitive for primitive in primitives if primitive not in mandatory]
-    random.shuffle(remaining)
-    selected = mandatory + remaining[: max(0, step_count - len(mandatory))]
-    if random.random() < 0.5:
-        middle = selected[1:]
-        random.shuffle(middle)
-        selected = [selected[0], *middle]
+    upper_pair = [primitives[1], primitives[2]]
+    lower_pair = [primitives[3], primitives[4]]
+    if random.random() < 0.45:
+        upper_pair.reverse()
+    if random.random() < 0.45:
+        lower_pair.reverse()
+
+    selected = [primitives[0], *upper_pair, *lower_pair]
+    optional = [primitives[5], primitives[6]]
+    random.shuffle(optional)
+    selected.extend(optional[: max(0, step_count - len(selected))])
     selected = selected[:step_count]
 
     actions = []

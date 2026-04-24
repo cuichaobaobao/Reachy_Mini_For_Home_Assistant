@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.28] - 2026-04-24
+
+### Fixed
+- Stop the richer idle generator from occasionally omitting a visible up/down head movement by making side-look, up-look, neck-stretch, down-look, and neck-tuck mandatory sequence primitives.
+- Further damp idle breathing on the downward Z path with a slower filter and larger deadband to reduce visible head jitter while descending.
+
+### Changed
+- Lengthen realtime idle sequences to 5-7 generated steps over about 7.0-10.5 seconds before hold and return so the motion reads as one smooth action sequence instead of a quick flick.
+
 ## [1.0.27] - 2026-04-24
 
 ### Changed
