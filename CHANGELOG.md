@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.31] - 2026-04-24
+
+### Changed
+- Crossfade listening, thinking, and speaking animation state changes directly between offsets instead of stepping through a zero-offset neutral frame.
+- Keep generated idle motion fully random while waiting a random 1-3 full official breathing cycles after each idle sequence before starting the next one.
+
 ## [1.0.30] - 2026-04-24
 
 ### Changed

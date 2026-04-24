@@ -34,16 +34,37 @@ class OfficialIdleBreathingTests(unittest.TestCase):
             clock.value += 0.25
             offsets = player.get_offsets()
 
+        elapsed = player._transition_duration + player._interpolation_duration + 0.25
         expected_z = OFFICIAL_BREATHING_Z_AMPLITUDE_M * math.sin(
-            2.0 * math.pi * OFFICIAL_BREATHING_FREQUENCY_HZ * 0.25
+            2.0 * math.pi * OFFICIAL_BREATHING_FREQUENCY_HZ * elapsed
         )
         expected_sway = OFFICIAL_BREATHING_ANTENNA_AMPLITUDE_RAD * math.sin(
-            2.0 * math.pi * OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ * 0.25
+            2.0 * math.pi * OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ * elapsed
         )
 
         self.assertAlmostEqual(offsets["z"], expected_z)
         self.assertAlmostEqual(offsets["antenna_left"], expected_sway)
         self.assertAlmostEqual(offsets["antenna_right"], -expected_sway)
+
+    def test_voice_state_animation_crossfades_without_zero_interpolation(self):
+        clock = _Clock(100.0)
+        with (
+            patch.object(animation_player_module.time, "perf_counter", clock.perf_counter),
+            patch.object(animation_player_module.random, "random", return_value=0.0),
+        ):
+            player = AnimationPlayer()
+            player._current_animation = "listening"
+            player._target_animation = "listening"
+            player._last_offsets = player._zero_offsets()
+            player._last_offsets["pitch"] = 0.1
+
+            self.assertTrue(player.set_animation("thinking"))
+            self.assertFalse(player._in_interpolation)
+
+            clock.value += player._transition_duration / 2.0
+            offsets = player.get_offsets()
+
+        self.assertGreater(offsets["pitch"], 0.03)
 
     def test_speaking_antenna_wiggle_matches_official_breathing_antenna_timing(self):
         config = json.loads(Path("reachy_mini_home_assistant/animations/conversation_animations.json").read_text())

@@ -228,6 +228,7 @@ class MovementManager:
             hold_range_s=(1.0, 2.0),
             return_duration_range_s=(2.2, 3.4),
             fade_out_duration_range_s=(0.35, 0.65),
+            breath_cycle_range=(1, 3),
             opposite_direction_bias=0.68,
             micro_motion_probability=0.05,
             min_repeat_distance=0.35,

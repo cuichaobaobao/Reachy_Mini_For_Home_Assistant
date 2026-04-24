@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from reachy_mini_home_assistant.motion.idle_runtime import enqueue_generated_idle_cycle
 from reachy_mini_home_assistant.motion.state_machine import (
+    OFFICIAL_BREATHING_FREQUENCY_HZ,
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
     IdleGenerationConfig,
@@ -28,6 +29,7 @@ class IdleGenerationTests(unittest.TestCase):
             hold_range_s=(1.0, 2.0),
             return_duration_range_s=(2.2, 3.4),
             fade_out_duration_range_s=(0.35, 0.65),
+            breath_cycle_range=(1, 3),
             opposite_direction_bias=0.68,
             micro_motion_probability=0.0,
             min_repeat_distance=0.35,
@@ -108,6 +110,18 @@ class IdleGenerationTests(unittest.TestCase):
             manager._idle_action_queue[return_index].target_antenna_left,
             OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
         )
+
+    def test_generated_idle_waits_one_to_three_full_breaths_before_next_sequence(self):
+        from reachy_mini_home_assistant.motion import idle_runtime
+
+        manager = types.SimpleNamespace(_idle_generation_config=self._config())
+        breath_period_s = 1.0 / OFFICIAL_BREATHING_FREQUENCY_HZ
+
+        with patch.object(random, "randint", return_value=2):
+            self.assertAlmostEqual(
+                idle_runtime._random_breathing_window_after_idle_action(manager),
+                2 * breath_period_s,
+            )
 
 
 if __name__ == "__main__":

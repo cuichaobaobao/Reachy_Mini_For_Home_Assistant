@@ -148,6 +148,7 @@ class IdleGenerationConfig:
     hold_range_s: tuple[float, float]
     return_duration_range_s: tuple[float, float]
     fade_out_duration_range_s: tuple[float, float]
+    breath_cycle_range: tuple[int, int]
     opposite_direction_bias: float
     micro_motion_probability: float
     min_repeat_distance: float
@@ -183,6 +184,28 @@ def parse_probability(value: Any, default: float) -> float:
         return default
 
 
+def parse_int_range(value: Any, default_min: int, default_max: int) -> tuple[int, int]:
+    """Parse an integer range from config value."""
+    if isinstance(value, (list, tuple)) and len(value) >= 2:
+        try:
+            min_v = int(value[0])
+            max_v = int(value[1])
+            if min_v > max_v:
+                min_v, max_v = max_v, min_v
+            return max(1, min_v), max(1, max_v)
+        except (TypeError, ValueError):
+            return default_min, default_max
+
+    if value is None:
+        return default_min, default_max
+
+    try:
+        cycles = max(1, int(value))
+        return cycles, cycles
+    except (TypeError, ValueError):
+        return default_min, default_max
+
+
 def load_idle_behavior_config(
     *,
     config_path: Path,
@@ -215,6 +238,7 @@ def load_idle_behavior_config(
         hold_range_s=(1.0, 2.0),
         return_duration_range_s=(2.2, 3.4),
         fade_out_duration_range_s=(0.35, 0.65),
+        breath_cycle_range=(1, 3),
         opposite_direction_bias=0.68,
         micro_motion_probability=0.05,
         min_repeat_distance=0.35,
@@ -294,6 +318,7 @@ def load_idle_behavior_config(
         fade_out_duration_range_s=parse_numeric_range(
             section.get("fade_out_duration_range_s"), 0.35, 0.65
         ),
+        breath_cycle_range=parse_int_range(section.get("breath_cycle_range"), 1, 3),
         opposite_direction_bias=parse_probability(section.get("opposite_direction_bias"), 0.68),
         micro_motion_probability=parse_probability(section.get("micro_motion_probability"), 0.05),
         min_repeat_distance=parse_probability(section.get("min_repeat_distance"), 0.35),

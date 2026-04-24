@@ -8,6 +8,7 @@ import random
 from typing import TYPE_CHECKING
 
 from .state_machine import (
+    OFFICIAL_BREATHING_FREQUENCY_HZ,
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
     OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
     PendingAction,
@@ -126,6 +127,15 @@ def _random_duration(duration_range: tuple[float, float], fallback: float) -> fl
     return random.uniform(duration_min, duration_max)
 
 
+def _random_breathing_window_after_idle_action(manager: MovementManager) -> float:
+    """Return a post-action pure breathing window in whole official breath cycles."""
+    cycle_min, cycle_max = manager._idle_generation_config.breath_cycle_range
+    cycle_min = max(1, int(cycle_min))
+    cycle_max = max(cycle_min, int(cycle_max))
+    breath_period_s = 1.0 / max(0.01, OFFICIAL_BREATHING_FREQUENCY_HZ)
+    return random.randint(cycle_min, cycle_max) * breath_period_s
+
+
 def _current_target_action(manager: MovementManager, *, name: str, duration: float) -> PendingAction:
     return PendingAction(
         name=name,
@@ -241,9 +251,9 @@ def update_idle_look_around(
         manager._last_idle_generated_yaw = idle_actions[0].target_yaw
         manager._last_idle_generated_signature = signature
         queued_duration = enqueue_generated_idle_cycle(manager, idle_actions)
+        breathing_window = _random_breathing_window_after_idle_action(manager)
         manager.state.look_around_in_progress = True
-        manager.state.next_look_around_time = now + queued_duration
-        schedule_next_idle_action_time(manager, manager.state.next_look_around_time)
+        manager.state.next_look_around_time = now + queued_duration + breathing_window
         return
 
     if not manager._idle_motion_enabled:

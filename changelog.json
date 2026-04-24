@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.31",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.31",
+      "Change: Crossfade listening, thinking, and speaking animation state changes directly between offsets instead of stepping through neutral zero",
+      "Change: Keep generated idle motion fully random while waiting a random 1-3 full official breathing cycles after each sequence before the next one"
+    ]
+  },
+  {
     "version": "1.0.30",
     "date": "2026-04-24",
     "changes": [

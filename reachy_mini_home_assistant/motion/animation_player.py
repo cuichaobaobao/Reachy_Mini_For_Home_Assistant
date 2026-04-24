@@ -70,8 +70,8 @@ class AnimationPlayer:
     - Multi-frequency oscillators for natural motion
     - Random phase offsets per animation start for variation
     - Smooth transitions between animations
-    - Interpolation phase: smooth transition from current pose to neutral before oscillation
-      (same as BreathingMove in reference project)
+    - Crossfade from the current animation offsets into the next animation
+      without forcing a neutral zero-offset step between voice states.
     """
 
     def __init__(self):
@@ -91,7 +91,7 @@ class AnimationPlayer:
         self._phase_x: float = 0.0
         self._phase_y: float = 0.0
         self._phase_z: float = 0.0
-        # Interpolation state (for smooth transition to neutral before oscillation)
+        # Transition state (for smooth crossfade between animation offsets)
         self._in_interpolation: bool = False
         self._interpolation_start_time: float = 0.0
         self._interpolation_start_offsets: dict[str, float] = {
@@ -104,6 +104,7 @@ class AnimationPlayer:
             "antenna_left": 0.0,
             "antenna_right": 0.0,
         }
+        self._transition_start_offsets: dict[str, float] = self._interpolation_start_offsets.copy()
         self._last_offsets: dict[str, float] = {
             "pitch": 0.0,
             "yaw": 0.0,
@@ -175,27 +176,32 @@ class AnimationPlayer:
     def set_animation(self, name: str) -> bool:
         """Set the current animation with smooth transition.
 
-        Like BreathingMove in reference project, this starts an interpolation
-        phase that smoothly transitions from the current pose to neutral before
-        starting the oscillation animation.
+        The previous implementation always eased the active offsets back to
+        zero before starting the next animation. That made voice-state changes
+        visibly pause or jump. We instead crossfade from the current offsets
+        directly into the next animation's oscillator.
         """
         with self._lock:
             if name not in self._animations and name is not None:
                 _LOGGER.warning("Unknown animation: %s", name)
                 return False
-            if name == self._current_animation and not self._in_interpolation:
+            if name == self._target_animation:
+                return True
+            if name == self._current_animation and name == self._target_animation:
                 return True
 
-            # Capture current offsets for interpolation start
+            # Capture current offsets for transition start
             self._interpolation_start_offsets = self._last_offsets.copy()
+            self._transition_start_offsets = self._last_offsets.copy()
             self._interpolation_start_time = time.perf_counter()
-            self._in_interpolation = True
+            self._in_interpolation = False
 
             self._target_animation = name
             self._transition_start = time.perf_counter()
+            self._phase_start = self._transition_start
             # Randomize phases for new animation
             self._randomize_phases()
-            _LOGGER.debug("Transitioning to animation: %s (interpolation phase)", name)
+            _LOGGER.debug("Crossfading to animation: %s", name)
             return True
 
     def stop(self) -> None:
@@ -207,9 +213,9 @@ class AnimationPlayer:
     def get_offsets(self, dt: float = 0.0) -> dict[str, float]:
         """Calculate current animation offsets.
 
-        Uses two-phase animation like BreathingMove in reference project:
-        1. Interpolation phase: smoothly transition from current pose to neutral
-        2. Oscillation phase: continuous sinusoidal breathing motion
+        Voice-state changes crossfade directly from the last visible offsets
+        into the next animation so listening/thinking/speaking transitions do
+        not force a short neutral pose between states.
 
         Each axis can have its own frequency for more organic movement.
 
@@ -222,129 +228,113 @@ class AnimationPlayer:
         with self._lock:
             now = time.perf_counter()
 
-            # Handle transition to new animation
+            # Handle transition to a new animation with a direct offset crossfade.
             if self._target_animation != self._current_animation:
-                elapsed = now - self._transition_start
-                if elapsed >= self._transition_duration:
+                transition_elapsed = max(0.0, now - self._transition_start)
+                progress = min(transition_elapsed / max(1e-6, self._transition_duration), 1.0)
+                smooth_t = progress * progress * (3.0 - 2.0 * progress)
+                target_offsets = self._zero_offsets()
+                if self._target_animation is not None:
+                    target_params = self._animations.get(self._target_animation)
+                    if target_params is not None:
+                        target_offsets = self._sample_animation_offsets(target_params, transition_elapsed)
+
+                result = {
+                    key: self._transition_start_offsets.get(key, 0.0) * (1.0 - smooth_t)
+                    + target_offsets.get(key, 0.0) * smooth_t
+                    for key in self._last_offsets
+                }
+
+                if progress >= 1.0:
                     self._current_animation = self._target_animation
-                    self._phase_start = now
+                    self._phase_start = now - transition_elapsed
+                    result = target_offsets
+
+                self._last_offsets = result.copy()
+                return result
 
             # No animation
             if self._current_animation is None:
-                result = {
-                    "pitch": 0.0,
-                    "yaw": 0.0,
-                    "roll": 0.0,
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0,
-                    "antenna_left": 0.0,
-                    "antenna_right": 0.0,
-                }
+                result = self._zero_offsets()
                 self._last_offsets = result.copy()
                 return result
 
             params = self._animations.get(self._current_animation)
             if params is None:
-                result = {
-                    "pitch": 0.0,
-                    "yaw": 0.0,
-                    "roll": 0.0,
-                    "x": 0.0,
-                    "y": 0.0,
-                    "z": 0.0,
-                    "antenna_left": 0.0,
-                    "antenna_right": 0.0,
-                }
+                result = self._zero_offsets()
                 self._last_offsets = result.copy()
                 return result
 
-            # Check if in interpolation phase
-            if self._in_interpolation:
-                interp_elapsed = now - self._interpolation_start_time
-                if interp_elapsed < self._interpolation_duration:
-                    # Phase 1: Linear interpolation from current pose to neutral (offset=0)
-                    # Use smooth ease-in-out for natural motion
-                    t = interp_elapsed / self._interpolation_duration
-                    # Smooth step: t * t * (3 - 2 * t)
-                    smooth_t = t * t * (3 - 2 * t)
-
-                    result = {}
-                    for key in self._interpolation_start_offsets:
-                        start_val = self._interpolation_start_offsets[key]
-                        # Interpolate toward 0 (neutral)
-                        result[key] = start_val * (1.0 - smooth_t)
-
-                    self._last_offsets = result.copy()
-                    return result
-                else:
-                    # Interpolation complete, start oscillation phase
-                    self._in_interpolation = False
-                    self._phase_start = now
-                    _LOGGER.debug("Interpolation complete, starting oscillation phase")
-
-            # Phase 2: Oscillation animation
             elapsed = now - self._phase_start
-            base_freq = params.frequency_hz
-
-            # Calculate blend factor for smooth transitions
-            blend = 1.0
-            if self._target_animation != self._current_animation:
-                blend = min((now - self._transition_start) / self._transition_duration, 1.0)
-
-            # Per-axis frequencies (fall back to base frequency if not specified)
-            pitch_freq = params.pitch_frequency_hz if params.pitch_frequency_hz > 0 else base_freq
-            yaw_freq = params.yaw_frequency_hz if params.yaw_frequency_hz > 0 else base_freq
-            roll_freq = params.roll_frequency_hz if params.roll_frequency_hz > 0 else base_freq
-            x_freq = params.x_frequency_hz if params.x_frequency_hz > 0 else base_freq
-            y_freq = params.y_frequency_hz if params.y_frequency_hz > 0 else base_freq
-            z_freq = params.z_frequency_hz if params.z_frequency_hz > 0 else base_freq
-
-            pitch = params.pitch_offset_rad + params.pitch_amplitude_rad * math.sin(
-                2 * math.pi * pitch_freq * elapsed + self._phase_pitch
-            )
-
-            yaw = params.yaw_offset_rad + params.yaw_amplitude_rad * math.sin(
-                2 * math.pi * yaw_freq * elapsed + self._phase_yaw
-            )
-
-            roll = params.roll_offset_rad + params.roll_amplitude_rad * math.sin(
-                2 * math.pi * roll_freq * elapsed + self._phase_roll
-            )
-
-            x = params.x_offset_m + params.x_amplitude_m * math.sin(2 * math.pi * x_freq * elapsed + self._phase_x)
-
-            y = params.y_offset_m + params.y_amplitude_m * math.sin(2 * math.pi * y_freq * elapsed + self._phase_y)
-
-            z_phase = 0.0 if params.name == "idle" else self._phase_z
-            z = params.z_offset_m + params.z_amplitude_m * math.sin(2 * math.pi * z_freq * elapsed + z_phase)
-
-            # Antenna movement with its own frequency
-            antenna_freq = params.antenna_frequency_hz if params.antenna_frequency_hz > 0 else base_freq
-            antenna_phase = 2 * math.pi * antenna_freq * elapsed
-            if params.antenna_move_name == "both":
-                left = right = params.antenna_amplitude_rad * math.sin(antenna_phase)
-            elif params.antenna_move_name == "wiggle":
-                left = params.antenna_amplitude_rad * math.sin(antenna_phase)
-                right = params.antenna_amplitude_rad * math.sin(antenna_phase + math.pi)
-            else:
-                left = params.antenna_amplitude_rad * math.sin(antenna_phase)
-                right = params.antenna_amplitude_rad * math.sin(antenna_phase + math.pi / 2)
-
-            # Apply scale and blend
-            scale = self._amplitude_scale * blend
-            result = {
-                "pitch": pitch * scale,
-                "yaw": yaw * scale,
-                "roll": roll * scale,
-                "x": x * scale,
-                "y": y * scale,
-                "z": z * scale,
-                "antenna_left": left * scale,
-                "antenna_right": right * scale,
-            }
+            result = self._sample_animation_offsets(params, elapsed)
             self._last_offsets = result.copy()
             return result
+
+    def _zero_offsets(self) -> dict[str, float]:
+        return {
+            "pitch": 0.0,
+            "yaw": 0.0,
+            "roll": 0.0,
+            "x": 0.0,
+            "y": 0.0,
+            "z": 0.0,
+            "antenna_left": 0.0,
+            "antenna_right": 0.0,
+        }
+
+    def _sample_animation_offsets(self, params: AnimationParams, elapsed: float) -> dict[str, float]:
+        base_freq = params.frequency_hz
+
+        # Per-axis frequencies (fall back to base frequency if not specified)
+        pitch_freq = params.pitch_frequency_hz if params.pitch_frequency_hz > 0 else base_freq
+        yaw_freq = params.yaw_frequency_hz if params.yaw_frequency_hz > 0 else base_freq
+        roll_freq = params.roll_frequency_hz if params.roll_frequency_hz > 0 else base_freq
+        x_freq = params.x_frequency_hz if params.x_frequency_hz > 0 else base_freq
+        y_freq = params.y_frequency_hz if params.y_frequency_hz > 0 else base_freq
+        z_freq = params.z_frequency_hz if params.z_frequency_hz > 0 else base_freq
+
+        pitch = params.pitch_offset_rad + params.pitch_amplitude_rad * math.sin(
+            2 * math.pi * pitch_freq * elapsed + self._phase_pitch
+        )
+
+        yaw = params.yaw_offset_rad + params.yaw_amplitude_rad * math.sin(
+            2 * math.pi * yaw_freq * elapsed + self._phase_yaw
+        )
+
+        roll = params.roll_offset_rad + params.roll_amplitude_rad * math.sin(
+            2 * math.pi * roll_freq * elapsed + self._phase_roll
+        )
+
+        x = params.x_offset_m + params.x_amplitude_m * math.sin(2 * math.pi * x_freq * elapsed + self._phase_x)
+
+        y = params.y_offset_m + params.y_amplitude_m * math.sin(2 * math.pi * y_freq * elapsed + self._phase_y)
+
+        z_phase = 0.0 if params.name == "idle" else self._phase_z
+        z = params.z_offset_m + params.z_amplitude_m * math.sin(2 * math.pi * z_freq * elapsed + z_phase)
+
+        # Antenna movement with its own frequency
+        antenna_freq = params.antenna_frequency_hz if params.antenna_frequency_hz > 0 else base_freq
+        antenna_phase = 2 * math.pi * antenna_freq * elapsed
+        if params.antenna_move_name == "both":
+            left = right = params.antenna_amplitude_rad * math.sin(antenna_phase)
+        elif params.antenna_move_name == "wiggle":
+            left = params.antenna_amplitude_rad * math.sin(antenna_phase)
+            right = params.antenna_amplitude_rad * math.sin(antenna_phase + math.pi)
+        else:
+            left = params.antenna_amplitude_rad * math.sin(antenna_phase)
+            right = params.antenna_amplitude_rad * math.sin(antenna_phase + math.pi / 2)
+
+        scale = self._amplitude_scale
+        return {
+            "pitch": pitch * scale,
+            "yaw": yaw * scale,
+            "roll": roll * scale,
+            "x": x * scale,
+            "y": y * scale,
+            "z": z * scale,
+            "antenna_left": left * scale,
+            "antenna_right": right * scale,
+        }
 
     @property
     def current_animation(self) -> str | None:
