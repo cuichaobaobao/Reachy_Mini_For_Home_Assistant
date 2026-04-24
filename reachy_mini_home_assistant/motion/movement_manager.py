@@ -74,8 +74,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_CONTROL_LOOP_FREQUENCY_HZ = 60
 MAX_CONTROL_DT_S = 0.05
 
-IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.4  # Slightly longer fade avoids visible idle/action handoff steps
-IDLE_ACTION_ANTENNA_SUPPRESSION = 0.25  # Keep idle antenna motion mostly continuous during idle actions
+IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.7  # Crossfade breathing in/out around generated idle actions
+IDLE_ACTION_ANTENNA_SUPPRESSION = 0.75  # Keep a small antenna breath while generated idle action owns the pose
 ANTENNA_LARGE_MOVE_THRESHOLD_RAD = 1.0
 ANTENNA_WAKE_MIN_DURATION_S = 1.0
 ANTENNA_WAKE_ACTIONS = frozenset({"turn_to", "doa_turn", "wake_from_idle_rest"})
@@ -218,9 +218,12 @@ class MovementManager:
             roll_range_deg=(-6.0, 6.0),
             x_range_m=(-0.002, 0.002),
             y_range_m=(-0.002, 0.002),
-            z_range_m=(-0.003, 0.006),
+            z_range_m=(-0.002, 0.006),
             antenna_variation_range_rad=(-0.06, 0.06),
-            duration_range_s=(3.0, 6.0),
+            duration_range_s=(2.2, 4.2),
+            hold_range_s=(0.35, 0.9),
+            return_duration_range_s=(1.0, 1.8),
+            fade_out_duration_range_s=(0.55, 0.85),
             opposite_direction_bias=0.68,
             micro_motion_probability=0.05,
             min_repeat_distance=0.35,
@@ -735,11 +738,16 @@ class MovementManager:
         if action.name in ANTENNA_WAKE_ACTIONS and antenna_delta > ANTENNA_LARGE_MOVE_THRESHOLD_RAD:
             antenna_duration = max(antenna_duration, ANTENNA_WAKE_MIN_DURATION_S)
 
-        # Use a softer easing curve so idle actions and micro gestures start/stop less abruptly.
         pose_progress = min(1.0, elapsed / pose_duration)
         antenna_progress = min(1.0, elapsed / antenna_duration)
-        t = _smootherstep(pose_progress)
-        antenna_t = _smootherstep(antenna_progress)
+        if action.name.startswith("idle_generated"):
+            # Generated idle cycles already crossfade breathing, so use a
+            # slightly more responsive curve than the extra-flat smootherstep.
+            t = _smoothstep(pose_progress)
+            antenna_t = _smoothstep(antenna_progress)
+        else:
+            t = _smootherstep(pose_progress)
+            antenna_t = _smootherstep(antenna_progress)
 
         # Interpolate pose
         self.state.target_pitch = start["pitch"] + t * (action.target_pitch - start["pitch"])

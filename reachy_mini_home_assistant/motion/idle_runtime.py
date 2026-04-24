@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def apply_idle_behavior_enabled(manager: "MovementManager", enabled: bool) -> None:
+def apply_idle_behavior_enabled(manager: MovementManager, enabled: bool) -> None:
     manager._idle_motion_enabled = enabled
     manager._idle_antenna_enabled = enabled
     manager._idle_generated_motion_enabled = enabled
@@ -42,7 +42,7 @@ def apply_idle_behavior_enabled(manager: "MovementManager", enabled: bool) -> No
     logger.info("Idle behavior %s", "enabled" if enabled else "disabled")
 
 
-def apply_idle_rest_pose(manager: "MovementManager") -> None:
+def apply_idle_rest_pose(manager: MovementManager) -> None:
     manager.state.target_pitch = manager._idle_rest_head_pitch_rad
     manager.state.target_yaw = 0.0
     manager.state.target_roll = 0.0
@@ -56,14 +56,14 @@ def apply_idle_rest_pose(manager: "MovementManager") -> None:
     manager._antenna_controller.reset()
 
 
-def transition_or_apply_idle_rest_pose(manager: "MovementManager", duration: float = 2.0) -> None:
+def transition_or_apply_idle_rest_pose(manager: MovementManager, duration: float = 2.0) -> None:
     if manager.state.robot_state == RobotState.IDLE:
         manager.transition_to_idle_rest(duration=duration)
     else:
         apply_idle_rest_pose(manager)
 
 
-def clear_idle_activity(manager: "MovementManager") -> None:
+def clear_idle_activity(manager: MovementManager) -> None:
     manager.state.next_look_around_time = 0.0
     manager.state.look_around_in_progress = False
     manager._idle_action_queue.clear()
@@ -73,7 +73,7 @@ def clear_idle_activity(manager: "MovementManager") -> None:
         manager._pending_action = None
 
 
-def clear_idle_animation(manager: "MovementManager") -> None:
+def clear_idle_animation(manager: MovementManager) -> None:
     manager._animation_player.stop()
     manager.state.anim_pitch = 0.0
     manager.state.anim_yaw = 0.0
@@ -85,13 +85,84 @@ def clear_idle_animation(manager: "MovementManager") -> None:
     manager.state.anim_antenna_right = 0.0
 
 
-def schedule_next_idle_action_time(manager: "MovementManager", now: float) -> None:
+def schedule_next_idle_action_time(manager: MovementManager, now: float) -> None:
     interval = random.uniform(manager._idle_generated_min_interval, manager._idle_generated_max_interval)
     manager.state.next_look_around_time = now + interval
 
 
+def _random_duration(duration_range: tuple[float, float], fallback: float) -> float:
+    try:
+        duration_min, duration_max = duration_range
+        duration_min = max(0.05, float(duration_min))
+        duration_max = max(duration_min, float(duration_max))
+    except (TypeError, ValueError):
+        return fallback
+    return random.uniform(duration_min, duration_max)
+
+
+def _current_target_action(manager: MovementManager, *, name: str, duration: float) -> PendingAction:
+    return PendingAction(
+        name=name,
+        target_pitch=manager.state.target_pitch,
+        target_yaw=manager.state.target_yaw,
+        target_roll=manager.state.target_roll,
+        target_x=manager.state.target_x,
+        target_y=manager.state.target_y,
+        target_z=manager.state.target_z,
+        target_antenna_left=manager.state.target_antenna_left,
+        target_antenna_right=manager.state.target_antenna_right,
+        duration=duration,
+    )
+
+
+def _hold_generated_action(action: PendingAction, *, duration: float) -> PendingAction:
+    return PendingAction(
+        name="idle_generated_hold",
+        target_pitch=action.target_pitch,
+        target_yaw=action.target_yaw,
+        target_roll=action.target_roll,
+        target_x=action.target_x,
+        target_y=action.target_y,
+        target_z=action.target_z,
+        target_antenna_left=action.target_antenna_left,
+        target_antenna_right=action.target_antenna_right,
+        duration=duration,
+    )
+
+
+def _return_to_breathing_neutral(duration: float) -> PendingAction:
+    return PendingAction(
+        name="idle_generated_return",
+        target_pitch=0.0,
+        target_yaw=0.0,
+        target_roll=0.0,
+        target_x=0.0,
+        target_y=0.0,
+        target_z=0.0,
+        target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+        target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
+        duration=duration,
+    )
+
+
+def enqueue_generated_idle_cycle(manager: MovementManager, idle_action: PendingAction) -> float:
+    """Queue one generated idle cycle with breathing crossfade and return."""
+    config = manager._idle_generation_config
+    fade_out = _random_duration(config.fade_out_duration_range_s, 0.7)
+    hold = _random_duration(config.hold_range_s, 0.6)
+    return_duration = _random_duration(config.return_duration_range_s, 1.4)
+
+    manager._idle_action_queue.append(
+        _current_target_action(manager, name="idle_generated_fade_out", duration=fade_out)
+    )
+    manager._idle_action_queue.append(idle_action)
+    manager._idle_action_queue.append(_hold_generated_action(idle_action, duration=hold))
+    manager._idle_action_queue.append(_return_to_breathing_neutral(return_duration))
+    return fade_out + max(0.0, float(idle_action.duration)) + hold + return_duration
+
+
 def update_idle_look_around(
-    manager: "MovementManager",
+    manager: MovementManager,
     *,
     inactivity_threshold_s: float,
     legacy_probability: float,
@@ -141,9 +212,8 @@ def update_idle_look_around(
         )
         manager._last_idle_generated_yaw = idle_action.target_yaw
         manager._last_idle_generated_signature = signature
-        manager._idle_action_queue.append(idle_action)
+        queued_duration = enqueue_generated_idle_cycle(manager, idle_action)
         manager.state.look_around_in_progress = True
-        queued_duration = sum(max(0.0, float(item.duration)) for item in manager._idle_action_queue)
         manager.state.next_look_around_time = now + queued_duration
         schedule_next_idle_action_time(manager, manager.state.next_look_around_time)
         return

@@ -145,6 +145,9 @@ class IdleGenerationConfig:
     z_range_m: tuple[float, float]
     antenna_variation_range_rad: tuple[float, float]
     duration_range_s: tuple[float, float]
+    hold_range_s: tuple[float, float]
+    return_duration_range_s: tuple[float, float]
+    fade_out_duration_range_s: tuple[float, float]
     opposite_direction_bias: float
     micro_motion_probability: float
     min_repeat_distance: float
@@ -206,9 +209,12 @@ def load_idle_behavior_config(
         roll_range_deg=(-6.0, 6.0),
         x_range_m=(-0.002, 0.002),
         y_range_m=(-0.002, 0.002),
-        z_range_m=(-0.003, 0.006),
+        z_range_m=(-0.002, 0.006),
         antenna_variation_range_rad=(-0.06, 0.06),
-        duration_range_s=(3.0, 6.0),
+        duration_range_s=(2.2, 4.2),
+        hold_range_s=(0.35, 0.9),
+        return_duration_range_s=(1.0, 1.8),
+        fade_out_duration_range_s=(0.55, 0.85),
         opposite_direction_bias=0.68,
         micro_motion_probability=0.05,
         min_repeat_distance=0.35,
@@ -274,10 +280,19 @@ def load_idle_behavior_config(
         roll_range_deg=parse_numeric_range(section.get("roll_range_deg"), -6.0, 6.0),
         x_range_m=parse_numeric_range(section.get("x_range_m"), -0.002, 0.002),
         y_range_m=parse_numeric_range(section.get("y_range_m"), -0.002, 0.002),
-        z_range_m=parse_numeric_range(section.get("z_range_m"), -0.003, 0.006),
+        z_range_m=parse_numeric_range(section.get("z_range_m"), -0.002, 0.006),
         antenna_variation_range_rad=parse_numeric_range(section.get("antenna_variation_range_rad"), -0.06, 0.06),
         duration_range_s=parse_numeric_range(
-            section.get("duration_range_s"), 3.0, 6.0
+            section.get("duration_range_s"), 2.2, 4.2
+        ),
+        hold_range_s=parse_numeric_range(
+            section.get("hold_range_s"), 0.35, 0.9
+        ),
+        return_duration_range_s=parse_numeric_range(
+            section.get("return_duration_range_s"), 1.0, 1.8
+        ),
+        fade_out_duration_range_s=parse_numeric_range(
+            section.get("fade_out_duration_range_s"), 0.55, 0.85
         ),
         opposite_direction_bias=parse_probability(section.get("opposite_direction_bias"), 0.68),
         micro_motion_probability=parse_probability(section.get("micro_motion_probability"), 0.05),

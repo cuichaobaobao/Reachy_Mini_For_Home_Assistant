@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.23",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.23",
+      "Change: Turn realtime idle motion into a breathing transition cycle with fade-out, generated action, brief hold, neutral return, and fade-in",
+      "Change: Retune generated idle ranges for a lighter ha-china-style feel while keeping runtime parameter generation",
+      "Fix: Use a more responsive idle-generated interpolation curve so generated idle actions feel less delayed without snapping"
+    ]
+  },
+  {
     "version": "1.0.22",
     "date": "2026-04-24",
     "changes": [

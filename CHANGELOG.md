@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.23] - 2026-04-24
+
+### Changed
+- Turn realtime idle motion into a full breathing transition cycle: fade out breathing, perform the generated action, hold briefly, return to breathing neutral, then fade breathing back in.
+- Retune generated idle ranges for a lighter ha-china-style feel while keeping runtime parameter generation and previous-motion distance checks.
+
+### Fixed
+- Use a more responsive idle-generated interpolation curve so generated idle actions feel less delayed without snapping.
+
 ## [1.0.22] - 2026-04-24
 
 ### Changed

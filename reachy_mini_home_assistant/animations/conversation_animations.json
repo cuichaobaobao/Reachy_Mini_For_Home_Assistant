@@ -697,21 +697,21 @@
     }
   },
   "idle_generated_motion": {
-    "description": "Realtime generated idle micro-motions. Each trigger samples fresh pose parameters instead of choosing from preset actions.",
+    "description": "Realtime generated idle cycles. Each trigger samples fresh pose parameters, fades out breathing, performs the action, holds briefly, then returns to breathing neutral.",
     "min_interval_s": 4,
     "max_interval_s": 10,
     "trigger_probability": 0.9,
     "yaw_range_deg": [
-      -24,
-      24
+      -20,
+      20
     ],
     "pitch_range_deg": [
-      -10,
-      9
+      -8,
+      7
     ],
     "roll_range_deg": [
-      -8,
-      8
+      -6,
+      6
     ],
     "x_range_m": [
       -0.003,
@@ -722,7 +722,7 @@
       0.003
     ],
     "z_range_m": [
-      -0.003,
+      -0.002,
       0.006
     ],
     "antenna_variation_range_rad": [
@@ -730,8 +730,20 @@
       0.06
     ],
     "duration_range_s": [
-      3.0,
-      6.0
+      2.2,
+      4.2
+    ],
+    "hold_range_s": [
+      0.35,
+      0.9
+    ],
+    "return_duration_range_s": [
+      1.0,
+      1.8
+    ],
+    "fade_out_duration_range_s": [
+      0.55,
+      0.85
     ],
     "opposite_direction_bias": 0.68,
     "micro_motion_probability": 0.05,
