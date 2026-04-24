@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.24] - 2026-04-24
+
+### Changed
+- Restore the historical disabled-idle sleep posture with the 16 degree head pitch and SDK sleep antenna pose.
+- Restore the older `wake_from_idle_rest` target so static-idle wakeups lift back to head-neutral with 0/0 antenna targets while preserving yaw.
+- Keep realtime generated idle motion truly parameter-generated for the head/body pose while using the official neutral antenna targets.
+- Match TTS speaking antenna wiggle to the official 15 degree, 0.5Hz antenna timing while leaving audio-driven head sway in control.
+
 ## [1.0.23] - 2026-04-24
 
 ### Changed

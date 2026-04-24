@@ -322,7 +322,6 @@ def _sample_generated_idle_values(
     x_min, x_max = config.x_range_m
     y_min, y_max = config.y_range_m
     z_min, z_max = config.z_range_m
-    antenna_min, antenna_max = config.antenna_variation_range_rad
     duration_min, duration_max = config.duration_range_s
 
     yaw = _sample_biased_yaw(config, last_yaw_rad)
@@ -331,10 +330,8 @@ def _sample_generated_idle_values(
     x = random.uniform(float(x_min), float(x_max))
     y = random.uniform(float(y_min), float(y_max))
     z = random.uniform(float(z_min), float(z_max))
-    antenna_left = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD + random.uniform(float(antenna_min), float(antenna_max))
-    antenna_right = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD + random.uniform(float(antenna_min), float(antenna_max))
-    antenna_left = max(math.radians(6.0), antenna_left)
-    antenna_right = min(-math.radians(6.0), antenna_right)
+    antenna_left = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD
+    antenna_right = OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD
     duration = max(1.5, random.uniform(float(duration_min), float(duration_max)))
 
     if random.random() < config.micro_motion_probability:
@@ -355,8 +352,8 @@ def _sample_generated_idle_values(
 def _generated_distance(candidate: tuple[float, ...], previous: tuple[float, ...] | None) -> float:
     if previous is None:
         return 1.0
-    yaw, pitch, roll, x, y, z, antenna_left, antenna_right, duration, _ = candidate
-    last_yaw, last_pitch, last_roll, last_x, last_y, last_z, last_left, last_right, last_duration, _ = previous
+    yaw, pitch, roll, x, y, z, _antenna_left, _antenna_right, duration, _ = candidate
+    last_yaw, last_pitch, last_roll, last_x, last_y, last_z, _last_left, _last_right, last_duration, _ = previous
     parts = (
         min(1.0, abs(yaw - last_yaw) / math.radians(18.0)),
         min(1.0, abs(pitch - last_pitch) / math.radians(8.0)),
@@ -364,8 +361,6 @@ def _generated_distance(candidate: tuple[float, ...], previous: tuple[float, ...
         min(1.0, abs(x - last_x) / 0.003),
         min(1.0, abs(y - last_y) / 0.003),
         min(1.0, abs(z - last_z) / 0.006),
-        min(1.0, abs(antenna_left - last_left) / 0.08),
-        min(1.0, abs(antenna_right - last_right) / 0.08),
         min(1.0, abs(duration - last_duration) / 2.0),
     )
     return sum(parts) / len(parts)

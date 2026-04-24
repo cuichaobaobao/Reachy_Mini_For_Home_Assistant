@@ -21,8 +21,8 @@ class CommandRuntimeSourceTests(unittest.TestCase):
         self.assertIn("target_pitch=0.0", body)
         self.assertIn("target_roll=0.0", body)
         self.assertIn("target_yaw=manager.state.target_yaw", body)
-        self.assertIn("target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD", body)
-        self.assertIn("target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD", body)
+        self.assertIn("target_antenna_left=0.0", body)
+        self.assertIn("target_antenna_right=0.0", body)
         self.assertIn("duration=0.7", body)
         self.assertIn("old_state == RobotState.IDLE and not manager._idle_behavior_enabled()", body)
         self.assertIn('manager._pending_action.name != "idle_rest"', body)
@@ -90,8 +90,15 @@ class VoicePipelineStopTests(unittest.TestCase):
         )
         protocol._set_stop_word_active_calls = []
         protocol._tts_finished_calls = 0
-        protocol._set_stop_word_active = lambda active: protocol._set_stop_word_active_calls.append(active)
-        protocol._tts_finished = lambda: setattr(protocol, "_tts_finished_calls", protocol._tts_finished_calls + 1)
+
+        def set_stop_word_active(active):
+            protocol._set_stop_word_active_calls.append(active)
+
+        def tts_finished():
+            protocol._tts_finished_calls += 1
+
+        protocol._set_stop_word_active = set_stop_word_active
+        protocol._tts_finished = tts_finished
         protocol.unduck = lambda: None
         return protocol
 

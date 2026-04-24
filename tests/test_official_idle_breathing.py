@@ -1,5 +1,7 @@
+import json
 import math
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from reachy_mini_home_assistant.motion import animation_player as animation_player_module
@@ -42,6 +44,23 @@ class OfficialIdleBreathingTests(unittest.TestCase):
         self.assertAlmostEqual(offsets["z"], expected_z)
         self.assertAlmostEqual(offsets["antenna_left"], expected_sway)
         self.assertAlmostEqual(offsets["antenna_right"], -expected_sway)
+
+    def test_speaking_antenna_wiggle_matches_official_breathing_antenna_timing(self):
+        config = json.loads(Path("reachy_mini_home_assistant/animations/conversation_animations.json").read_text())
+        speaking = config["animations"]["speaking"]
+
+        self.assertEqual(speaking["antenna_move_name"], "wiggle")
+        self.assertAlmostEqual(speaking["antenna_amplitude_rad"], OFFICIAL_BREATHING_ANTENNA_AMPLITUDE_RAD)
+        self.assertAlmostEqual(speaking["antenna_frequency_hz"], OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ)
+        self.assertAlmostEqual(speaking["frequency_hz"], OFFICIAL_BREATHING_ANTENNA_FREQUENCY_HZ)
+
+    def test_disabled_idle_rest_pose_uses_historical_sleep_posture(self):
+        config = json.loads(Path("reachy_mini_home_assistant/animations/conversation_animations.json").read_text())
+        rest = config["idle_rest_pose"]
+
+        self.assertAlmostEqual(rest["pitch_deg"], 16.0)
+        self.assertAlmostEqual(rest["antenna_left_rad"], 3.05)
+        self.assertAlmostEqual(rest["antenna_right_rad"], -3.05)
 
 
 if __name__ == "__main__":

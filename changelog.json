@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.24",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.24",
+      "Change: Restore the historical disabled-idle sleep posture with 16 degree head pitch and SDK sleep antenna pose",
+      "Change: Restore wake_from_idle_rest to head-neutral with 0/0 antenna targets while preserving yaw",
+      "Change: Keep realtime generated idle pose parameters random while holding antenna targets at official neutral",
+      "Change: Match TTS speaking antenna wiggle to official 15 degree, 0.5Hz antenna timing"
+    ]
+  },
+  {
     "version": "1.0.23",
     "date": "2026-04-24",
     "changes": [
