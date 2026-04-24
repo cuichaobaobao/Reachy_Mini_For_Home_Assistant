@@ -76,7 +76,9 @@ MAX_CONTROL_DT_S = 0.05
 
 IDLE_ACTION_ANIMATION_BLEND_DURATION = 0.7  # Crossfade head breathing in/out around generated idle actions
 IDLE_ACTION_ANTENNA_SUPPRESSION = 0.0  # Keep official antenna breathing fully active during generated idle actions
-IDLE_BREATHING_Z_SMOOTHING_TAU_S = 0.22  # Low-pass only the idle z breath to reduce motor micro-jitter
+IDLE_BREATHING_Z_SMOOTHING_TAU_UP_S = 0.2
+IDLE_BREATHING_Z_SMOOTHING_TAU_DOWN_S = 0.45  # Slower downward breath reduces visible motor micro-jitter
+IDLE_BREATHING_Z_DEADBAND_M = 0.00018
 ANTENNA_LARGE_MOVE_THRESHOLD_RAD = 1.0
 ANTENNA_WAKE_MIN_DURATION_S = 1.0
 ANTENNA_WAKE_ACTIONS = frozenset({"turn_to", "doa_turn", "wake_from_idle_rest"})
@@ -832,9 +834,14 @@ class MovementManager:
         self.state.anim_y = offsets["y"] * idle_animation_scale
         anim_z = offsets["z"] * idle_animation_scale
         if self.state.robot_state == RobotState.IDLE and idle_animation_scale > 0.0:
-            alpha = min(1.0, dt_safe / IDLE_BREATHING_Z_SMOOTHING_TAU_S)
-            self._idle_breathing_z_smoothed += alpha * (anim_z - self._idle_breathing_z_smoothed)
-            anim_z = self._idle_breathing_z_smoothed
+            z_delta = anim_z - self._idle_breathing_z_smoothed
+            if abs(z_delta) < IDLE_BREATHING_Z_DEADBAND_M:
+                anim_z = self._idle_breathing_z_smoothed
+            else:
+                tau = IDLE_BREATHING_Z_SMOOTHING_TAU_DOWN_S if z_delta < 0.0 else IDLE_BREATHING_Z_SMOOTHING_TAU_UP_S
+                alpha = min(1.0, dt_safe / tau)
+                self._idle_breathing_z_smoothed += alpha * z_delta
+                anim_z = self._idle_breathing_z_smoothed
         else:
             self._idle_breathing_z_smoothed = anim_z
         self.state.anim_z = anim_z

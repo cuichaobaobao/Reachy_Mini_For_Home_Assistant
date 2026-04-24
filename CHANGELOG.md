@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.27] - 2026-04-24
+
+### Changed
+- Make realtime idle sequences richer by composing 4-6 generated steps from side-look, up-look, down-look, neck-stretch, neck-tuck, opposite-glance, and settle primitives.
+- Lengthen generated idle sequence motion to about 5.8-8.6 seconds before hold and return.
+- Expand generated neck travel so idle can visibly stretch upward and tuck downward while preserving official neutral antenna targets.
+- Add asymmetric idle breathing Z smoothing with a small deadband so downward breathing updates are gentler.
+
 ## [1.0.26] - 2026-04-24
 
 ### Changed

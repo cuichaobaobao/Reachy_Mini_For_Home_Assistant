@@ -697,7 +697,7 @@
     }
   },
   "idle_generated_motion": {
-    "description": "Realtime generated idle sequences. Each trigger samples a fresh multi-step pose sequence, briefly fades breathing, performs look/lift/dip motion with official neutral antenna targets, holds, then returns to breathing neutral.",
+    "description": "Realtime generated idle sequences. Each trigger samples a fresh 4-6 step pose sequence from look, stretch, tuck, up, down, and side-glance primitives, then returns to breathing neutral.",
     "min_interval_s": 3,
     "max_interval_s": 15,
     "trigger_probability": 1,
@@ -722,24 +722,24 @@
       0.004
     ],
     "z_range_m": [
-      -0.002,
-      0.01
+      -0.006,
+      0.014
     ],
     "antenna_variation_range_rad": [
       -0.06,
       0.06
     ],
     "duration_range_s": [
-      3.2,
-      4.8
+      5.8,
+      8.6
     ],
     "hold_range_s": [
-      0.7,
-      1.4
+      0.8,
+      1.6
     ],
     "return_duration_range_s": [
-      1.4,
-      2.2
+      1.8,
+      2.8
     ],
     "fade_out_duration_range_s": [
       0.25,

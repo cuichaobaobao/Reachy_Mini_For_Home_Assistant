@@ -1,5 +1,16 @@
 [
   {
+    "version": "1.0.27",
+    "date": "2026-04-24",
+    "changes": [
+      "Build: Bump package version to 1.0.27",
+      "Change: Compose realtime idle from 4-6 generated side-look, up-look, down-look, neck-stretch, neck-tuck, opposite-glance, and settle steps",
+      "Change: Lengthen generated idle sequence motion to about 5.8-8.6 seconds before hold and return",
+      "Change: Expand generated neck travel while preserving official neutral antenna targets",
+      "Fix: Add asymmetric idle breathing Z smoothing with a small deadband so downward breathing updates are gentler"
+    ]
+  },
+  {
     "version": "1.0.26",
     "date": "2026-04-24",
     "changes": [

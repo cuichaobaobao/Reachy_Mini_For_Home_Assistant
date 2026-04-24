@@ -209,11 +209,11 @@ def load_idle_behavior_config(
         roll_range_deg=(-6.0, 6.0),
         x_range_m=(-0.002, 0.002),
         y_range_m=(-0.002, 0.002),
-        z_range_m=(-0.002, 0.01),
+        z_range_m=(-0.006, 0.014),
         antenna_variation_range_rad=(-0.06, 0.06),
-        duration_range_s=(3.2, 4.8),
-        hold_range_s=(0.7, 1.4),
-        return_duration_range_s=(1.4, 2.2),
+        duration_range_s=(5.8, 8.6),
+        hold_range_s=(0.8, 1.6),
+        return_duration_range_s=(1.8, 2.8),
         fade_out_duration_range_s=(0.25, 0.45),
         opposite_direction_bias=0.68,
         micro_motion_probability=0.05,
@@ -349,13 +349,43 @@ def _sample_generated_idle_values(
     return yaw, pitch, roll, x, y, z, antenna_left, antenna_right, duration, random.random()
 
 
-def _split_sequence_duration(total_duration: float) -> tuple[float, float, float]:
-    """Split a generated idle movement into three slow, visible segments."""
-    first = random.uniform(0.34, 0.42)
-    second = random.uniform(0.28, 0.36)
-    third = max(0.22, 1.0 - first - second)
-    scale = max(3.0, total_duration) / (first + second + third)
-    return first * scale, second * scale, third * scale
+def _split_sequence_duration(total_duration: float, step_count: int) -> list[float]:
+    """Split a generated idle movement into several slow, visible segments."""
+    weights = [random.uniform(0.85, 1.35) for _ in range(max(1, step_count))]
+    total_weight = sum(weights)
+    duration = max(5.0, total_duration)
+    return [duration * weight / total_weight for weight in weights]
+
+
+def _official_neutral_antenna_targets() -> dict[str, float]:
+    return {
+        "target_antenna_left": OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
+        "target_antenna_right": OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
+    }
+
+
+def _make_idle_step(
+    *,
+    name: str,
+    yaw: float,
+    pitch: float,
+    roll: float,
+    x: float,
+    y: float,
+    z: float,
+    duration: float,
+) -> PendingAction:
+    return PendingAction(
+        name=f"idle_generated_{name}",
+        target_yaw=yaw,
+        target_pitch=pitch,
+        target_roll=roll,
+        target_x=x,
+        target_y=y,
+        target_z=z,
+        duration=duration,
+        **_official_neutral_antenna_targets(),
+    )
 
 
 def _generated_distance(candidate: tuple[float, ...], previous: tuple[float, ...] | None) -> float:
@@ -422,58 +452,108 @@ def build_generated_idle_action_sequence(
         last_yaw_rad=last_yaw_rad,
         last_signature=last_signature,
     )
-    look_duration, lift_duration, dip_duration = _split_sequence_duration(action.duration)
+    step_count = random.randint(4, 6)
+    durations = _split_sequence_duration(action.duration, step_count)
     yaw_sign = 1.0 if action.target_yaw >= 0.0 else -1.0
-    lift_z = max(action.target_z, random.uniform(0.006, 0.011))
-    dip_z = random.uniform(-0.002, 0.0015)
-    look_pitch = action.target_pitch * random.uniform(0.35, 0.65)
-    lift_pitch = -abs(random.uniform(math.radians(2.0), math.radians(6.0)))
-    dip_pitch = abs(random.uniform(math.radians(4.0), math.radians(10.0)))
-    look_roll = action.target_roll * random.uniform(0.25, 0.55)
-    lift_roll = action.target_roll * random.uniform(0.45, 0.8)
-    dip_roll = -yaw_sign * abs(action.target_roll) * random.uniform(0.35, 0.75)
-    look_x = action.target_x * random.uniform(0.35, 0.65)
-    lift_x = action.target_x
-    dip_x = action.target_x * random.uniform(0.15, 0.45)
-    look_y = action.target_y * random.uniform(0.35, 0.65)
-    lift_y = action.target_y
-    dip_y = -action.target_y * random.uniform(0.15, 0.45)
+    side_yaw = math.copysign(
+        max(abs(action.target_yaw), math.radians(random.uniform(10.0, 24.0))),
+        yaw_sign,
+    )
+    opposite_yaw = -side_yaw * random.uniform(0.35, 0.8)
+    up_pitch = -abs(random.uniform(math.radians(5.0), math.radians(12.0)))
+    down_pitch = abs(random.uniform(math.radians(5.0), math.radians(13.0)))
+    stretch_z = max(action.target_z, random.uniform(0.008, 0.014))
+    tuck_z = random.uniform(-0.006, -0.002)
+    side_roll = yaw_sign * abs(random.uniform(math.radians(1.5), math.radians(7.0)))
 
-    return [
-        PendingAction(
-            name="idle_generated_look",
-            target_yaw=action.target_yaw,
-            target_pitch=look_pitch,
-            target_roll=look_roll,
-            target_x=look_x,
-            target_y=look_y,
-            target_z=0.0,
-            target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
-            target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
-            duration=look_duration,
+    primitives = [
+        (
+            "look_side",
+            side_yaw,
+            action.target_pitch * random.uniform(0.35, 0.75),
+            side_roll,
+            action.target_x * random.uniform(0.35, 0.75),
+            action.target_y,
+            random.uniform(-0.001, 0.003),
         ),
-        PendingAction(
-            name="idle_generated_lift",
-            target_yaw=action.target_yaw + math.radians(random.uniform(-3.5, 3.5)),
-            target_pitch=lift_pitch,
-            target_roll=lift_roll,
-            target_x=lift_x,
-            target_y=lift_y,
-            target_z=lift_z,
-            target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
-            target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
-            duration=lift_duration,
+        (
+            "look_up",
+            side_yaw * random.uniform(0.45, 0.85),
+            up_pitch,
+            action.target_roll * random.uniform(0.35, 0.75),
+            action.target_x * random.uniform(0.4, 1.0),
+            action.target_y * random.uniform(0.35, 0.8),
+            random.uniform(0.004, 0.01),
         ),
-        PendingAction(
-            name="idle_generated_dip",
-            target_yaw=action.target_yaw * random.uniform(0.55, 0.85),
-            target_pitch=dip_pitch,
-            target_roll=dip_roll,
-            target_x=dip_x,
-            target_y=dip_y,
-            target_z=dip_z,
-            target_antenna_left=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_LEFT_RAD,
-            target_antenna_right=OFFICIAL_NEUTRAL_ANTENNA_LOCAL_RIGHT_RAD,
-            duration=dip_duration,
+        (
+            "stretch_neck",
+            side_yaw + math.radians(random.uniform(-4.0, 4.0)),
+            random.uniform(math.radians(-4.0), math.radians(3.0)),
+            action.target_roll * random.uniform(0.5, 1.0),
+            action.target_x,
+            action.target_y,
+            stretch_z,
         ),
-    ], signature
+        (
+            "look_down",
+            side_yaw * random.uniform(0.4, 0.75),
+            down_pitch,
+            -side_roll * random.uniform(0.3, 0.8),
+            action.target_x * random.uniform(0.15, 0.55),
+            -action.target_y * random.uniform(0.15, 0.45),
+            random.uniform(-0.002, 0.002),
+        ),
+        (
+            "tuck_neck",
+            opposite_yaw * random.uniform(0.2, 0.65),
+            down_pitch * random.uniform(0.45, 0.9),
+            -side_roll * random.uniform(0.2, 0.65),
+            -action.target_x * random.uniform(0.1, 0.4),
+            -action.target_y * random.uniform(0.2, 0.6),
+            tuck_z,
+        ),
+        (
+            "look_opposite",
+            opposite_yaw,
+            random.choice((up_pitch, down_pitch)) * random.uniform(0.25, 0.65),
+            -side_roll * random.uniform(0.35, 0.8),
+            -action.target_x * random.uniform(0.25, 0.75),
+            -action.target_y,
+            random.uniform(-0.001, 0.005),
+        ),
+        (
+            "settle_glance",
+            side_yaw * random.uniform(0.15, 0.4),
+            action.target_pitch * random.uniform(0.15, 0.4),
+            action.target_roll * random.uniform(0.1, 0.35),
+            action.target_x * random.uniform(0.05, 0.25),
+            action.target_y * random.uniform(0.05, 0.25),
+            random.uniform(-0.001, 0.003),
+        ),
+    ]
+
+    mandatory = [primitives[0], random.choice((primitives[1], primitives[2])), random.choice((primitives[3], primitives[4]))]
+    remaining = [primitive for primitive in primitives if primitive not in mandatory]
+    random.shuffle(remaining)
+    selected = mandatory + remaining[: max(0, step_count - len(mandatory))]
+    if random.random() < 0.5:
+        middle = selected[1:]
+        random.shuffle(middle)
+        selected = [selected[0], *middle]
+    selected = selected[:step_count]
+
+    actions = []
+    for index, (name, yaw, pitch, roll, x, y, z) in enumerate(selected):
+        actions.append(
+            _make_idle_step(
+                name=f"{name}_{index + 1}",
+                yaw=yaw,
+                pitch=pitch,
+                roll=roll,
+                x=x,
+                y=y,
+                z=z,
+                duration=durations[index],
+            )
+        )
+    return actions, signature

@@ -75,7 +75,9 @@ class MotionTimingSourceTests(unittest.TestCase):
         content = path.read_text(encoding="utf-8")
 
         self.assertIn("IDLE_ACTION_ANTENNA_SUPPRESSION = 0.0", content)
-        self.assertIn("IDLE_BREATHING_Z_SMOOTHING_TAU_S", content)
+        self.assertIn("IDLE_BREATHING_Z_SMOOTHING_TAU_UP_S", content)
+        self.assertIn("IDLE_BREATHING_Z_SMOOTHING_TAU_DOWN_S", content)
+        self.assertIn("IDLE_BREATHING_Z_DEADBAND_M", content)
         self.assertIn("self._idle_breathing_z_smoothed", content)
 
     def test_disabled_idle_rest_return_is_gentler(self):
