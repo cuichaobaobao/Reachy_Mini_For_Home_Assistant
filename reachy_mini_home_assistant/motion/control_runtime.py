@@ -68,16 +68,20 @@ def compose_final_pose(manager: MovementManager) -> tuple[np.ndarray, tuple[floa
 
     final_head_yaw = extract_yaw_from_pose(final_head)
     target_body_yaw = clamp_body_yaw(final_head_yaw)
-    active_turn_action = manager._pending_action is not None and manager._pending_action.name in {"turn_to", "doa_turn"}
+    active_body_follow_action = manager._pending_action is not None and manager._pending_action.name in {
+        "turn_to",
+        "doa_turn",
+        "manual_head_yaw",
+    }
     active_recenter_action = (
         manager._pending_action is not None and manager._pending_action.name in {"neutral", "neutral_yaw"}
     )
-    if manager.state.robot_state == RobotState.SPEAKING and not (active_turn_action or active_recenter_action):
+    if manager.state.robot_state == RobotState.SPEAKING and not (active_body_follow_action or active_recenter_action):
         target_body_yaw = manager._body_yaw_smoothed if manager._body_yaw_smoothed is not None else 0.0
     if (
         manager.state.robot_state == RobotState.IDLE
         and not manager._manual_head_yaw_hold
-        and not active_turn_action
+        and not active_body_follow_action
     ):
         target_body_yaw = 0.0
 
@@ -88,7 +92,7 @@ def compose_final_pose(manager: MovementManager) -> tuple[np.ndarray, tuple[floa
     else:
         dt = max(1e-6, now - manager._last_body_yaw_update)
         max_rate_rad_s = math.radians(Config.motion.body_yaw_max_rate_deg_s)
-        if manager.state.robot_state != RobotState.IDLE or active_turn_action:
+        if manager.state.robot_state != RobotState.IDLE or active_body_follow_action:
             max_rate_rad_s *= 1.15
         max_step = max_rate_rad_s * dt
         delta = target_body_yaw - manager._body_yaw_smoothed

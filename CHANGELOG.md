@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.35] - 2026-04-25
+
+### Fixed
+- Keep body yaw following manual head yaw actions while returning toward neutral so the head and body recenter together.
+- Clear queued generated-idle actions when a manual head yaw command arrives so idle random motion cannot pull the head back to zero.
+
 ## [1.0.34] - 2026-04-25
 
 ### Changed

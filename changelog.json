@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.35",
+    "date": "2026-04-25",
+    "changes": [
+      "Build: Bump package version to 1.0.35",
+      "Fix: Keep body yaw following manual head yaw actions while returning toward neutral",
+      "Fix: Clear queued generated-idle actions when a manual head yaw command arrives so random idle motion cannot pull the head back to zero"
+    ]
+  },
+  {
     "version": "1.0.34",
     "date": "2026-04-25",
     "changes": [

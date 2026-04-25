@@ -33,6 +33,18 @@ def _cancel_idle_motion_for_wakeup(manager: MovementManager) -> None:
     manager._idle_action_animation_suppression = 0.0
 
 
+def _cancel_idle_motion_for_manual_pose(manager: MovementManager) -> None:
+    pending = manager._pending_action
+    if pending is not None and (
+        pending.name == "look_around" or pending.name.startswith(("idle_action", "idle_generated"))
+    ):
+        manager._pending_action = None
+    manager._idle_action_queue.clear()
+    manager.state.look_around_in_progress = False
+    manager.state.next_look_around_time = 0.0
+    manager._idle_action_animation_suppression = 0.0
+
+
 def poll_commands(manager: MovementManager) -> None:
     while True:
         try:
@@ -129,6 +141,7 @@ def handle_command(manager: MovementManager, cmd: str, payload: Any) -> None:
         )
         if yaw_only:
             target_yaw = payload["yaw"]
+            _cancel_idle_motion_for_manual_pose(manager)
             manager._manual_head_yaw_hold = abs(target_yaw) >= math.radians(1.0)
             yaw_delta = abs(target_yaw - manager.state.target_yaw)
             transition_duration = max(0.8, min(2.5, yaw_delta / math.radians(45.0)))

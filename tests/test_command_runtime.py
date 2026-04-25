@@ -50,9 +50,9 @@ class MotionTimingSourceTests(unittest.TestCase):
         path = Path("reachy_mini_home_assistant/motion/control_runtime.py")
         content = path.read_text(encoding="utf-8")
 
-        self.assertIn('manager._pending_action.name in {"turn_to", "doa_turn"}', content)
-        self.assertIn("and not active_turn_action", content)
-        self.assertIn("or active_turn_action", content)
+        self.assertIn('"manual_head_yaw"', content)
+        self.assertIn("and not active_body_follow_action", content)
+        self.assertIn("or active_body_follow_action", content)
 
     def test_turn_actions_keep_fast_pose_with_separate_antenna_smoothing(self):
         path = Path("reachy_mini_home_assistant/motion/movement_manager.py")
@@ -102,9 +102,19 @@ class MotionTimingSourceTests(unittest.TestCase):
 
         self.assertIn("manager.state.robot_state == RobotState.SPEAKING", content)
         self.assertIn("target_body_yaw = manager._body_yaw_smoothed", content)
+        self.assertIn("active_body_follow_action", content)
         self.assertIn("active_recenter_action", content)
         self.assertIn('manager._pending_action.name in {"neutral", "neutral_yaw"}', content)
-        self.assertIn("not (active_turn_action or active_recenter_action)", content)
+        self.assertIn("not (active_body_follow_action or active_recenter_action)", content)
+
+    def test_manual_yaw_clears_idle_generated_queue(self):
+        content = Path("reachy_mini_home_assistant/motion/command_runtime.py").read_text(encoding="utf-8")
+
+        self.assertIn("def _cancel_idle_motion_for_manual_pose", content)
+        self.assertIn('pending.name.startswith(("idle_action", "idle_generated"))', content)
+        self.assertIn("manager._idle_action_queue.clear()", content)
+        self.assertIn("_cancel_idle_motion_for_manual_pose(manager)", content)
+        self.assertIn('name="manual_head_yaw"', content)
 
     def test_tts_head_motion_uses_official_style_wobbler_thread(self):
         stream_pcm = Path("reachy_mini_home_assistant/audio/audio_player_stream_pcm.py").read_text(encoding="utf-8")
