@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.36",
+    "date": "2026-04-25",
+    "changes": [
+      "Build: Bump package version to 1.0.36",
+      "Change: Tune wakeup DOA turning to skip only under 6 degrees instead of 10 degrees",
+      "Change: Turn toward the full detected DOA yaw instead of 80 percent with a smoother 0.65 second turn"
+    ]
+  },
+  {
     "version": "1.0.35",
     "date": "2026-04-25",
     "changes": [

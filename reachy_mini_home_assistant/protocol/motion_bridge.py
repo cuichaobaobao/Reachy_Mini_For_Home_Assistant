@@ -20,6 +20,10 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+DOA_WAKE_MIN_YAW_DEG = 6.0
+DOA_WAKE_TURN_SCALE = 1.0
+DOA_WAKE_TURN_DURATION_S = 0.65
+
 
 def turn_to_sound_source(protocol: VoiceSatelliteProtocol) -> None:
     if not protocol.state.motion_enabled:
@@ -37,13 +41,17 @@ def turn_to_sound_source(protocol: VoiceSatelliteProtocol) -> None:
         yaw_rad = -(angle_rad - math.pi / 2)
         yaw_deg = math.degrees(yaw_rad)
         _LOGGER.debug("DOA direction: x=%.2f, y=%.2f, yaw=%.1f°", dir_x, dir_y, yaw_deg)
-        if abs(yaw_deg) < 10.0:
-            _LOGGER.debug("DOA angle %.1f° below threshold (%.1f°), skipping turn", yaw_deg, 10.0)
+        if abs(yaw_deg) < DOA_WAKE_MIN_YAW_DEG:
+            _LOGGER.debug(
+                "DOA angle %.1f° below threshold (%.1f°), skipping turn",
+                yaw_deg,
+                DOA_WAKE_MIN_YAW_DEG,
+            )
             return
-        target_yaw_deg = yaw_deg * 0.8
+        target_yaw_deg = yaw_deg * DOA_WAKE_TURN_SCALE
         _LOGGER.info("Turning toward sound source: DOA=%.1f°, target=%.1f°", yaw_deg, target_yaw_deg)
         if protocol.state.motion and protocol.state.motion.movement_manager:
-            protocol.state.motion.movement_manager.turn_to_angle(target_yaw_deg, duration=0.5)
+            protocol.state.motion.movement_manager.turn_to_angle(target_yaw_deg, duration=DOA_WAKE_TURN_DURATION_S)
     except Exception as e:
         _LOGGER.error("Error in turn-to-sound: %s", e)
 

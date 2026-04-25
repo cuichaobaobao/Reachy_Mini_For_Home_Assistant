@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.36] - 2026-04-25
+
+### Changed
+- Tune wakeup DOA turning to be more responsive by lowering the skip threshold from 10° to 6°.
+- Turn toward the full detected DOA yaw instead of 80% of it, with a slightly slower 0.65s turn for smoother motion.
+
 ## [1.0.35] - 2026-04-25
 
 ### Fixed
