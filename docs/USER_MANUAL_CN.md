@@ -79,6 +79,9 @@ Home Assistant 会通过 mDNS 自动发现 Reachy Mini。
 | Backend Ready | 二进制传感器 | 后端连接状态 |
 | Mute | 开关 | 暂停/恢复语音链路 |
 | Speaker Volume | 数值 (0-100%) | 扬声器音量控制 |
+| Wake Word 1 Sensitivity | 数值 (0.0-1.0) | 第 1 个激活唤醒词的 OHF 阈值 |
+| Wake Word 2 Sensitivity | 数值 (0.0-1.0) | 第 2 个激活唤醒词的 OHF 阈值 |
+| Stop Word Sensitivity | 数值 (0.0-1.0) | Stop 停止词的 OHF 阈值 |
 | Idle Behavior | 开关 | 统一空闲行为：头部、天线、微动作 |
 
 ### 阶段 2：运行状态
@@ -150,4 +153,4 @@ ESPHome 端口： 6053
 
 ---
 
-*Reachy Mini 语音助手 v1.0.36*
+*Reachy Mini 语音助手 v1.0.37*

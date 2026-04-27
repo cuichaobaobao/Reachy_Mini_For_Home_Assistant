@@ -31,6 +31,7 @@ class AvailableWakeWord:
     wake_word: str
     trained_languages: list[str]
     wake_word_path: Path
+    probability_cutoff: float = 0.7
 
     def load(self) -> "MicroWakeWord":
         if self.type == WakeWordType.MICRO_WAKE_WORD:
@@ -44,6 +45,9 @@ class AvailableWakeWord:
 @dataclass
 class Preferences:
     active_wake_words: list[str] = field(default_factory=list)
+    wake_word_1_sensitivity: float | None = None
+    wake_word_2_sensitivity: float | None = None
+    stop_word_sensitivity: float | None = None
     # Continuous conversation mode (controlled from Home Assistant)
     continuous_conversation: bool = False
     # Unified idle behavior toggle (controlled from Home Assistant)
@@ -80,6 +84,9 @@ class ServerState:
     media_player_entity: "MediaPlayerEntity | None" = None
     satellite: "VoiceSatelliteProtocol | None" = None
     wake_words_changed: bool = False
+    wake_word_1_threshold: float = 0.7
+    wake_word_2_threshold: float = 0.7
+    stop_word_threshold: float = 0.5
     refractory_seconds: float = 2.0
     timer_max_ring_seconds: float = 900.0
     _entities_initialized: bool = False

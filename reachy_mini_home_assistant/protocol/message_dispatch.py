@@ -126,16 +126,23 @@ def handle_message(protocol: "VoiceSatelliteProtocol", msg: message.Message) -> 
         return [
             VoiceAssistantConfigurationResponse(
                 available_wake_words=available_wake_words,
-                active_wake_words=[ww.id for ww in protocol.state.wake_words.values() if ww.id in protocol.state.active_wake_words],
+                active_wake_words=[
+                    wake_word_id
+                    for wake_word_id in protocol.state.preferences.active_wake_words
+                    if wake_word_id in protocol.state.active_wake_words
+                ]
+                or [ww.id for ww in protocol.state.wake_words.values() if ww.id in protocol.state.active_wake_words],
                 max_active_wake_words=2,
             )
         ]
 
     if isinstance(msg, VoiceAssistantSetConfiguration):
         active_wake_words: set[str] = set()
+        active_wake_word_ids: list[str] = []
         for wake_word_id in msg.active_wake_words:
             if wake_word_id in protocol.state.wake_words:
                 active_wake_words.add(wake_word_id)
+                active_wake_word_ids.append(wake_word_id)
                 continue
             model_info = protocol.state.available_wake_words.get(wake_word_id)
             if not model_info:
@@ -147,9 +154,10 @@ def handle_message(protocol: "VoiceSatelliteProtocol", msg: message.Message) -> 
             protocol.state.wake_words[wake_word_id] = loaded_model
             _LOGGER.info("Wake word loaded: %s", wake_word_id)
             active_wake_words.add(wake_word_id)
+            active_wake_word_ids.append(wake_word_id)
         protocol.state.active_wake_words = active_wake_words
         _LOGGER.debug("Active wake words: %s", active_wake_words)
-        protocol.state.preferences.active_wake_words = list(active_wake_words)
+        protocol.state.preferences.active_wake_words = active_wake_word_ids
         protocol.state.save_preferences()
         protocol.state.wake_words_changed = True
         return []

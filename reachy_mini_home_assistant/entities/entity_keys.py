@@ -20,6 +20,9 @@ ENTITY_KEYS: dict[str, int] = {
     "mute": 102,
     "speaker_volume": 103,
     "idle_behavior_enabled": 104,
+    "wake_word_1_sensitivity": 105,
+    "wake_word_2_sensitivity": 106,
+    "stop_word_sensitivity": 107,
     # Phase 2: Runtime controls (200-299)
     "motor_mode": 201,
     # Phase 3: Pose control (300-399)

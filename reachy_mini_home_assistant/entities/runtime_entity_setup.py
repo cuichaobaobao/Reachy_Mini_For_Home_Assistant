@@ -18,6 +18,33 @@ _LOGGER = logging.getLogger(__name__)
 def setup_runtime_entities(registry: "EntityRegistry", entities: list) -> None:
     rc = registry.reachy_controller
 
+    def get_wake_word_1_sensitivity() -> float:
+        return float(registry._get_server_state().wake_word_1_threshold)
+
+    def set_wake_word_1_sensitivity(value: float) -> None:
+        state = registry._get_server_state()
+        state.wake_word_1_threshold = float(value)
+        state.preferences.wake_word_1_sensitivity = float(value)
+        state.save_preferences()
+
+    def get_wake_word_2_sensitivity() -> float:
+        return float(registry._get_server_state().wake_word_2_threshold)
+
+    def set_wake_word_2_sensitivity(value: float) -> None:
+        state = registry._get_server_state()
+        state.wake_word_2_threshold = float(value)
+        state.preferences.wake_word_2_sensitivity = float(value)
+        state.save_preferences()
+
+    def get_stop_word_sensitivity() -> float:
+        return float(registry._get_server_state().stop_word_threshold)
+
+    def set_stop_word_sensitivity(value: float) -> None:
+        state = registry._get_server_state()
+        state.stop_word_threshold = float(value)
+        state.preferences.stop_word_sensitivity = float(value)
+        state.save_preferences()
+
     entities.append(
         TextSensorEntity(
             server=registry.server,
@@ -54,6 +81,54 @@ def setup_runtime_entities(registry: "EntityRegistry", entities: list) -> None:
             entity_category=1,
             value_getter=rc.get_speaker_volume,
             value_setter=rc.set_speaker_volume,
+        )
+    )
+    entities.append(
+        NumberEntity(
+            server=registry.server,
+            key=get_entity_key("wake_word_1_sensitivity"),
+            name="Wake Word 1 Sensitivity",
+            object_id="wake_word_1_sensitivity",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.001,
+            icon="mdi:microphone-question",
+            mode=1,
+            entity_category=1,
+            value_getter=get_wake_word_1_sensitivity,
+            value_setter=set_wake_word_1_sensitivity,
+        )
+    )
+    entities.append(
+        NumberEntity(
+            server=registry.server,
+            key=get_entity_key("wake_word_2_sensitivity"),
+            name="Wake Word 2 Sensitivity",
+            object_id="wake_word_2_sensitivity",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.001,
+            icon="mdi:microphone-question",
+            mode=1,
+            entity_category=1,
+            value_getter=get_wake_word_2_sensitivity,
+            value_setter=set_wake_word_2_sensitivity,
+        )
+    )
+    entities.append(
+        NumberEntity(
+            server=registry.server,
+            key=get_entity_key("stop_word_sensitivity"),
+            name="Stop Word Sensitivity",
+            object_id="stop_word_sensitivity",
+            min_value=0.0,
+            max_value=1.0,
+            step=0.001,
+            icon="mdi:microphone-off",
+            mode=1,
+            entity_category=1,
+            value_getter=get_stop_word_sensitivity,
+            value_setter=set_stop_word_sensitivity,
         )
     )
 

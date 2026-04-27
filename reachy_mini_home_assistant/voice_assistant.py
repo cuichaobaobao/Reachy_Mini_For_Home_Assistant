@@ -154,6 +154,7 @@ class VoiceAssistantService:
             reachy_mini=self.reachy_mini,
             motion_enabled=True,
         )
+        self._restore_wake_word_thresholds(self._state)
 
         # Log stop word status
         if self._state.stop_word:
@@ -532,6 +533,15 @@ class VoiceAssistantService:
     def _find_missing_files(base_dir: Path, filenames: list[str]) -> list[str]:
         return [filename for filename in filenames if not (base_dir / filename).exists()]
 
+    @staticmethod
+    def _get_probability_cutoff(config: dict, model_type: WakeWordType, default: float) -> float:
+        """Read a wake word probability cutoff the same way OHF does."""
+        type_config = config.get(model_type.value, {})
+        try:
+            return float(type_config.get("probability_cutoff", default))
+        except (TypeError, ValueError):
+            return default
+
     def _load_available_wake_words(self) -> dict[str, AvailableWakeWord]:
         """Load available wake word configurations."""
         available_wake_words: dict[str, AvailableWakeWord] = {}
@@ -553,6 +563,7 @@ class VoiceAssistantService:
                     wake_word=config.get("wake_word", model_id),
                     trained_languages=config.get("trained_languages", []),
                     wake_word_path=config_path,
+                    probability_cutoff=self._get_probability_cutoff(config, model_type, 0.7),
                 )
             except Exception as e:
                 _LOGGER.warning("Failed to load wake word %s: %s", config_path, e)
@@ -655,6 +666,63 @@ class VoiceAssistantService:
         _LOGGER.error("Stop model not available at %s - stop functionality will be disabled", stop_config)
         return None
 
+    def _get_stop_word_default_threshold(self) -> float:
+        """Read the bundled stop word default cutoff."""
+        stop_config = _WAKEWORDS_DIR / "stop.json"
+        try:
+            with open(stop_config, encoding="utf-8") as f:
+                config = json.load(f)
+            return self._get_probability_cutoff(config, WakeWordType.MICRO_WAKE_WORD, 0.5)
+        except Exception:
+            return 0.5
+
+    def _active_wake_word_ids_in_slot_order(self, state: ServerState) -> list[str]:
+        """Return active wake word IDs in the same slot order Home Assistant uses."""
+        ordered_ids: list[str] = []
+        for wake_word_id in state.preferences.active_wake_words:
+            if wake_word_id in state.active_wake_words and wake_word_id in state.wake_words:
+                ordered_ids.append(wake_word_id)
+
+        for wake_word_id in state.wake_words:
+            if (
+                wake_word_id in state.active_wake_words
+                and wake_word_id not in ordered_ids
+            ):
+                ordered_ids.append(wake_word_id)
+
+        return ordered_ids[:2]
+
+    def _restore_wake_word_thresholds(self, state: ServerState) -> None:
+        """Restore OHF-style sensitivity thresholds from preferences/model defaults."""
+        active_ids = self._active_wake_word_ids_in_slot_order(state)
+
+        wake_word_1_default = (
+            state.available_wake_words[active_ids[0]].probability_cutoff
+            if len(active_ids) >= 1 and active_ids[0] in state.available_wake_words
+            else 0.7
+        )
+        wake_word_2_default = (
+            state.available_wake_words[active_ids[1]].probability_cutoff
+            if len(active_ids) >= 2 and active_ids[1] in state.available_wake_words
+            else 0.7
+        )
+
+        state.wake_word_1_threshold = (
+            float(state.preferences.wake_word_1_sensitivity)
+            if state.preferences.wake_word_1_sensitivity is not None
+            else wake_word_1_default
+        )
+        state.wake_word_2_threshold = (
+            float(state.preferences.wake_word_2_sensitivity)
+            if state.preferences.wake_word_2_sensitivity is not None
+            else wake_word_2_default
+        )
+        state.stop_word_threshold = (
+            float(state.preferences.stop_word_sensitivity)
+            if state.preferences.stop_word_sensitivity is not None
+            else self._get_stop_word_default_threshold()
+        )
+
     def _process_audio(self) -> None:
         """Process audio from Reachy Mini's microphone."""
         from pymicro_wakeword import MicroWakeWordFeatures
@@ -754,6 +822,7 @@ class VoiceAssistantService:
         if (not ctx.wake_words) or (self._state.wake_words_changed and self._state.wake_words):
             self._state.wake_words_changed = False
             ctx.wake_words.clear()
+            self._restore_wake_word_thresholds(self._state)
 
             # Reset feature extractors to clear any residual audio data
             # This prevents false triggers when switching wake words
@@ -763,14 +832,11 @@ class VoiceAssistantService:
             # Also reset the refractory period to prevent immediate trigger
             ctx.last_active = time.monotonic()
 
-            # state.wake_words is keyed by wake word ID.
-            # We need to filter by active_wake_words (which contains the IDs/keys)
-            for ww_id, ww_model in self._state.wake_words.items():
-                if ww_id in self._state.active_wake_words:
-                    # Ensure the model has an 'id' attribute for later use
-                    if not hasattr(ww_model, "id"):
-                        ww_model.id = ww_id
-                    ctx.wake_words.append(ww_model)
+            for ww_id in self._active_wake_word_ids_in_slot_order(self._state):
+                ww_model = self._state.wake_words[ww_id]
+                if not hasattr(ww_model, "id"):
+                    ww_model.id = ww_id
+                ctx.wake_words.append(ww_model)
 
             _LOGGER.info("Active wake words updated: %s (features reset)", list(self._state.active_wake_words))
 
@@ -923,10 +989,15 @@ class VoiceAssistantService:
         """
         from pymicro_wakeword import MicroWakeWord
 
-        for wake_word in ctx.wake_words:
+        for wake_word_index, wake_word in enumerate(ctx.wake_words):
             activated = False
 
             if isinstance(wake_word, MicroWakeWord):
+                wake_word.probability_cutoff = (
+                    self._state.wake_word_1_threshold
+                    if wake_word_index == 0
+                    else self._state.wake_word_2_threshold
+                )
                 for micro_input in ctx.micro_inputs:
                     if wake_word.process_streaming(micro_input):
                         activated = True
@@ -957,6 +1028,7 @@ class VoiceAssistantService:
                 pass
 
         stopped = False
+        self._state.stop_word.probability_cutoff = self._state.stop_word_threshold
         for micro_input in ctx.micro_inputs:
             if self._state.stop_word.process_streaming(micro_input):
                 stopped = True

@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.37] - 2026-04-27
+
+### Added
+- Add OHF-aligned wake word sensitivity controls for active wake word slot 1, active wake word slot 2, and the stop word.
+
+### Changed
+- Apply Home Assistant sensitivity values directly to MicroWakeWord probability cutoffs during wake and stop detection.
+- Preserve Home Assistant active wake word slot order so sensitivity controls map to the same active slots as OHF.
+
 ## [1.0.36] - 2026-04-25
 
 ### Changed

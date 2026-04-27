@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.0.37",
+    "date": "2026-04-27",
+    "changes": [
+      "Build: Bump package version to 1.0.37",
+      "Add: Expose OHF-aligned Wake Word 1, Wake Word 2, and Stop Word sensitivity controls in Home Assistant",
+      "Change: Apply Home Assistant sensitivity values directly to MicroWakeWord probability cutoffs during detection",
+      "Change: Preserve active wake word slot order so sensitivity controls map to the same active slots as OHF"
+    ]
+  },
+  {
     "version": "1.0.36",
     "date": "2026-04-25",
     "changes": [

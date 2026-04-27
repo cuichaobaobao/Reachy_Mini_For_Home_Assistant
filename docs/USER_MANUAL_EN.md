@@ -79,6 +79,9 @@ The robot can play 35 emotion moves, including happy, sad, angry, surprised, lau
 | Backend Ready | Binary Sensor | Backend connection status |
 | Mute | Switch | Suspend/resume voice pipeline |
 | Speaker Volume | Number 0-100% | Speaker volume control |
+| Wake Word 1 Sensitivity | Number 0.0-1.0 | OHF threshold for active wake word slot 1 |
+| Wake Word 2 Sensitivity | Number 0.0-1.0 | OHF threshold for active wake word slot 2 |
+| Stop Word Sensitivity | Number 0.0-1.0 | OHF threshold for the stop word |
 | Idle Behavior | Switch | Unified idle motion, antenna motion, and micro-actions |
 
 ### Phase 2: Runtime State
@@ -150,4 +153,4 @@ ESPHome Port:  6053
 
 ---
 
-*Reachy Mini Voice Assistant v1.0.36*
+*Reachy Mini Voice Assistant v1.0.37*
