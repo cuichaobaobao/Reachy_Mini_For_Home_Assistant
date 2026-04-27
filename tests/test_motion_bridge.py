@@ -29,6 +29,16 @@ class MotionBridgeDOATests(unittest.TestCase):
         self.assertAlmostEqual(yaw, 30.0)
         self.assertAlmostEqual(duration, 0.65)
 
+    def test_wakeup_doa_uses_dynamic_duration_for_large_turns(self):
+        protocol, calls = self._protocol_for_doa(0.0)
+
+        motion_bridge.turn_to_sound_source(protocol)
+
+        self.assertEqual(len(calls), 1)
+        yaw, duration = calls[0]
+        self.assertAlmostEqual(yaw, 90.0)
+        self.assertAlmostEqual(duration, 1.2)
+
     def test_wakeup_doa_skips_only_under_six_degrees(self):
         protocol, calls = self._protocol_for_doa(85.0)
 

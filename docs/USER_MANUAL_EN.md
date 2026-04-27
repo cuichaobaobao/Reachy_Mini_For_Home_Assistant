@@ -153,4 +153,4 @@ ESPHome Port:  6053
 
 ---
 
-*Reachy Mini Voice Assistant v1.0.37*
+*Reachy Mini Voice Assistant v1.0.38*

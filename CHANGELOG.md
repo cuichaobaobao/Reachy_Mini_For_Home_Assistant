@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.38] - 2026-04-27
+
+### Changed
+- Make wakeup DOA turns use an angle-based duration so large side turns give body yaw more time to follow the head.
+- Keep the existing 6° wake turn threshold and full 1.0 DOA yaw scale while capping large-turn duration at 1.25s.
+
 ## [1.0.37] - 2026-04-27
 
 ### Added

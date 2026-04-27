@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.38",
+    "date": "2026-04-27",
+    "changes": [
+      "Build: Bump package version to 1.0.38",
+      "Change: Make wakeup DOA turns use an angle-based duration so large side turns give body yaw more time to follow the head",
+      "Change: Keep the 6 degree wake turn threshold and full 1.0 DOA yaw scale while capping large-turn duration at 1.25 seconds"
+    ]
+  },
+  {
     "version": "1.0.37",
     "date": "2026-04-27",
     "changes": [
