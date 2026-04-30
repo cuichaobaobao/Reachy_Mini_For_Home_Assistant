@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.40",
+    "date": "2026-04-30",
+    "changes": [
+      "Build: Bump package version to 1.0.40",
+      "Change: Hold neutral awake pose for 10 seconds after a completed conversation when idle behavior is disabled",
+      "Change: Cancel delayed idle-rest return when a new wake/listen/think/speak state starts during the hold window"
+    ]
+  },
+  {
     "version": "1.0.39",
     "date": "2026-04-30",
     "changes": [

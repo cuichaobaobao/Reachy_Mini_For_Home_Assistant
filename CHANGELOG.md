@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.40] - 2026-04-30
+
+### Changed
+- When idle behavior is disabled, hold the neutral awake pose for 10s after a completed conversation before returning to the low-energy idle rest pose.
+- Cancel the delayed idle-rest return immediately if a new wake/listen/think/speak motion state starts during the hold window.
+
 ## [1.0.39] - 2026-04-30
 
 ### Fixed

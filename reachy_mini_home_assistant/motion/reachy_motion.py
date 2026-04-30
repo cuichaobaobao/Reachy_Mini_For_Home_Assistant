@@ -5,10 +5,12 @@ MovementManager for unified control.
 """
 
 import logging
+import threading
 
 from .movement_manager import MovementManager, RobotState
 
 _LOGGER = logging.getLogger(__name__)
+IDLE_REST_HOLD_DELAY_S = 10.0
 
 
 class ReachyMiniMotion:
@@ -22,6 +24,8 @@ class ReachyMiniMotion:
         self.reachy_mini = reachy_mini
         self._movement_manager: MovementManager | None = None
         self._is_speaking = False
+        self._idle_rest_delay_timer: threading.Timer | None = None
+        self._idle_rest_delay_generation = 0
 
         _LOGGER.debug("ReachyMiniMotion.__init__ called with reachy_mini=%s", reachy_mini)
 
@@ -51,6 +55,7 @@ class ReachyMiniMotion:
 
     def shutdown(self):
         """Shutdown the motion controller."""
+        self._cancel_delayed_idle_rest()
         if self._movement_manager is not None:
             self._movement_manager.stop()
             _LOGGER.info("Motion control stopped")
@@ -64,11 +69,49 @@ class ReachyMiniMotion:
     # Public non-blocking motion methods
     # -------------------------------------------------------------------------
 
+    def _cancel_delayed_idle_rest(self) -> None:
+        self._idle_rest_delay_generation += 1
+        if self._idle_rest_delay_timer is not None:
+            self._idle_rest_delay_timer.cancel()
+            self._idle_rest_delay_timer = None
+
+    def _schedule_delayed_idle_rest(self) -> None:
+        """Delay the low-energy rest pose after a conversation ends.
+
+        When idle animation is disabled, the robot should not immediately drop
+        into the historical low-energy rest pose after speaking. Hold the
+        neutral awake pose briefly so quick follow-up wake words feel natural.
+        """
+        self._cancel_delayed_idle_rest()
+        self._idle_rest_delay_generation += 1
+        generation = self._idle_rest_delay_generation
+
+        def _go_rest() -> None:
+            self._idle_rest_delay_timer = None
+            manager = self._movement_manager
+            if manager is None:
+                return
+            if generation != self._idle_rest_delay_generation:
+                return
+            if manager.state.robot_state != RobotState.IDLE:
+                return
+            if manager.get_idle_behavior_enabled():
+                return
+            if manager._manual_head_yaw_hold:
+                return
+            manager.transition_to_idle_rest(duration=2.6)
+
+        self._idle_rest_delay_timer = threading.Timer(IDLE_REST_HOLD_DELAY_S, _go_rest)
+        self._idle_rest_delay_timer.daemon = True
+        self._idle_rest_delay_timer.start()
+        _LOGGER.debug("Scheduled idle rest transition in %.1fs", IDLE_REST_HOLD_DELAY_S)
+
     def on_wakeup(self):
         """Called when wake word is detected.
 
         Non-blocking: command sent to MovementManager.
         """
+        self._cancel_delayed_idle_rest()
         _LOGGER.debug("on_wakeup called")
         if self._movement_manager is None:
             _LOGGER.warning("on_wakeup: movement_manager is None, skipping motion")
@@ -82,6 +125,7 @@ class ReachyMiniMotion:
 
         Non-blocking: command sent to MovementManager.
         """
+        self._cancel_delayed_idle_rest()
         if self._movement_manager is None:
             return
 
@@ -93,6 +137,7 @@ class ReachyMiniMotion:
 
         Non-blocking: command sent to MovementManager.
         """
+        self._cancel_delayed_idle_rest()
         if self._movement_manager is None:
             return
 
@@ -105,6 +150,7 @@ class ReachyMiniMotion:
         Non-blocking: command sent to MovementManager.
         Animation offsets are defined in conversation_animations.json.
         """
+        self._cancel_delayed_idle_rest()
         if self._movement_manager is None:
             return
 
@@ -118,6 +164,7 @@ class ReachyMiniMotion:
         The state is still exposed to the motion state machine, while the
         visible speaking motion is driven by SpeechSwayRT from TTS audio.
         """
+        self._cancel_delayed_idle_rest()
         if self._movement_manager is None:
             _LOGGER.warning("MovementManager not initialized, skipping speaking animation")
             return
@@ -144,6 +191,7 @@ class ReachyMiniMotion:
         if self._movement_manager is None:
             return
 
+        self._cancel_delayed_idle_rest()
         self._is_speaking = False
         if not self._movement_manager._manual_head_yaw_hold:
             self._movement_manager.reset_yaw_to_neutral(duration=1.2)
@@ -161,9 +209,11 @@ class ReachyMiniMotion:
         self._movement_manager.set_state(RobotState.IDLE)
         if not self._movement_manager._manual_head_yaw_hold:
             if self._movement_manager.get_idle_behavior_enabled():
+                self._cancel_delayed_idle_rest()
                 self._movement_manager.reset_to_neutral(duration=1.0)
             else:
-                self._movement_manager.transition_to_idle_rest(duration=2.6)
+                self._movement_manager.reset_to_neutral(duration=1.0)
+                self._schedule_delayed_idle_rest()
 
         _LOGGER.debug("Reachy Mini: Idle pose")
 
@@ -176,6 +226,7 @@ class ReachyMiniMotion:
         if self._movement_manager is None:
             return
 
+        self._cancel_delayed_idle_rest()
         self._is_speaking = False
         self._movement_manager.reset_to_neutral(duration=0.6)
         self._movement_manager.set_state(RobotState.IDLE)
