@@ -2,6 +2,7 @@
 
 import importlib.metadata
 import logging
+import threading
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
@@ -9,6 +10,7 @@ from typing import TYPE_CHECKING
 from aioesphomeapi.api_pb2 import (  # type: ignore[attr-defined]
     HomeAssistantStateResponse,
     VoiceAssistantAudio,
+    VoiceAssistantRequest,
 )
 from google.protobuf import message
 from pymicro_wakeword import MicroWakeWord
@@ -61,11 +63,9 @@ from .voice_pipeline import (
     stop as stop_pipeline,
 )
 
-if TYPE_CHECKING:
-    import threading
-
 _LOGGER = logging.getLogger(__name__)
 IDLE_RETURN_DELAY_S = 1.3
+LISTENING_WATCHDOG_TIMEOUT_S = 30.0
 
 try:
     _AIOESPHOMEAPI_VERSION = importlib.metadata.version("aioesphomeapi")
@@ -106,6 +106,8 @@ class VoiceSatelliteProtocol(APIServer):
         # Track Home Assistant entity states for change detection
         self._ha_entity_states: dict[str, str] = {}
         self._idle_return_timer: threading.Timer | None = None
+        self._listening_watchdog_timer: threading.Timer | None = None
+        self._listening_watchdog_generation = 0
         self._pipeline_active = False
 
         # Initialize Reachy controller
@@ -266,6 +268,67 @@ class VoiceSatelliteProtocol(APIServer):
     def _schedule_delayed_idle_return(self) -> None:
         schedule_delayed_idle_return(self, IDLE_RETURN_DELAY_S)
 
+    def _start_listening_watchdog(self) -> None:
+        """Start a local guard for Home Assistant runs that never finish listening."""
+        self._cancel_listening_watchdog()
+        self._listening_watchdog_generation += 1
+        generation = self._listening_watchdog_generation
+
+        def _timeout() -> None:
+            if generation != self._listening_watchdog_generation:
+                return
+            if not self._pipeline_active:
+                return
+            _LOGGER.warning(
+                "Listening watchdog timeout after %.0fs - aborting stuck voice pipeline",
+                LISTENING_WATCHDOG_TIMEOUT_S,
+            )
+            self._abort_voice_pipeline(reason="listening_timeout", notify_ha=True, return_to_idle=True)
+
+        self._listening_watchdog_timer = threading.Timer(LISTENING_WATCHDOG_TIMEOUT_S, _timeout)
+        self._listening_watchdog_timer.daemon = True
+        self._listening_watchdog_timer.start()
+
+    def _cancel_listening_watchdog(self) -> None:
+        self._listening_watchdog_generation += 1
+        if self._listening_watchdog_timer is not None:
+            self._listening_watchdog_timer.cancel()
+            self._listening_watchdog_timer = None
+
+    def _abort_voice_pipeline(self, *, reason: str, notify_ha: bool, return_to_idle: bool) -> None:
+        """Clear a stuck/abandoned Assist run and optionally bring motion back to idle."""
+        self._cancel_listening_watchdog()
+        self._cancel_delayed_idle_return()
+        self._is_streaming_audio = False
+        self._pipeline_active = False
+        self._pending_voice_request = None
+        self._tts_url = None
+        self._tts_played = False
+        self._continue_conversation = False
+        self._timer_finished = False
+        self._timer_ring_start = None
+        self.state.active_wake_words.discard(self.state.stop_word.id)
+        self._set_stop_word_active(False)
+
+        try:
+            self.state.tts_player.stop()
+        except Exception as exc:
+            _LOGGER.debug("Ignoring TTS stop error while aborting pipeline (%s): %s", reason, exc)
+
+        try:
+            self.unduck()
+        except Exception as exc:
+            _LOGGER.debug("Ignoring unduck error while aborting pipeline (%s): %s", reason, exc)
+
+        if notify_ha and self._writelines is not None:
+            try:
+                self.send_messages([VoiceAssistantRequest(start=False)])
+            except Exception as exc:
+                _LOGGER.debug("Unable to notify HA about voice abort (%s): %s", reason, exc)
+
+        if return_to_idle:
+            self._reachy_on_idle()
+
     def _enter_motion_state(self, context: str, callback_name: str) -> None:
         enter_motion_state(self, context, callback_name)
 
@@ -285,17 +348,14 @@ class VoiceSatelliteProtocol(APIServer):
     def connection_lost(self, exc):
         super().connection_lost(exc)
         _LOGGER.info("Disconnected from Home Assistant")
-        self._cancel_delayed_idle_return()
-        # Clear streaming state on disconnect
-        self._is_streaming_audio = False
-        self._pipeline_active = False
-        self._pending_voice_request = None
-        self._tts_url = None
-        self._tts_played = False
-        self._continue_conversation = False
-        self._timer_finished = False
-        self._timer_ring_start = None
-        self._set_stop_word_active(False)
+        was_voice_active = (
+            self._pipeline_active
+            or self._is_streaming_audio
+            or self._pending_voice_request is not None
+            or self._tts_url is not None
+            or self._timer_finished
+        )
+        self._abort_voice_pipeline(reason="ha_disconnected", notify_ha=False, return_to_idle=was_voice_active)
 
         run_ha_disconnected_callback(self)
 
@@ -338,11 +398,7 @@ class VoiceSatelliteProtocol(APIServer):
         Stops any current playback and releases resources.
         """
         _LOGGER.info("Suspending VoiceSatellite resources...")
-        self._cancel_delayed_idle_return()
-        self._pipeline_active = False
-        self._pending_voice_request = None
-        self._timer_finished = False
-        self._timer_ring_start = None
+        self._abort_voice_pipeline(reason="suspend", notify_ha=False, return_to_idle=True)
 
         # Stop any current TTS/music
         if self.state.tts_player:

@@ -62,6 +62,7 @@ def play_wakeup_sound(protocol: "VoiceSatelliteProtocol") -> None:
 
 
 def tts_finished(protocol: "VoiceSatelliteProtocol") -> None:
+    protocol._cancel_listening_watchdog()
     protocol._pipeline_active = False
     protocol.state.active_wake_words.discard(protocol.state.stop_word.id)
     protocol._set_stop_word_active(False)
@@ -79,6 +80,7 @@ def tts_finished(protocol: "VoiceSatelliteProtocol") -> None:
         queue_voice_request_after_wakeup(protocol, conversation_id=conv_id)
         protocol._pipeline_active = True
         protocol._reachy_on_listening()
+        protocol._start_listening_watchdog()
         play_wakeup_sound(protocol)
     else:
         clear_conversation(protocol)

@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.39",
+    "date": "2026-04-30",
+    "changes": [
+      "Build: Bump package version to 1.0.39",
+      "Fix: Add a 30 second listening watchdog that aborts stuck Assist runs and returns Reachy motion to idle",
+      "Fix: Force motion back to idle when Home Assistant disconnects during an active voice pipeline"
+    ]
+  },
+  {
     "version": "1.0.38",
     "date": "2026-04-27",
     "changes": [

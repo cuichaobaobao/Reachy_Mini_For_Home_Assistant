@@ -28,18 +28,21 @@ def handle_voice_event(
         protocol._tts_played = False
         protocol._continue_conversation = False
         protocol._reachy_on_listening()
+        protocol._start_listening_watchdog()
         return
 
     if event_type in (
         VoiceAssistantEventType.VOICE_ASSISTANT_STT_VAD_END,
         VoiceAssistantEventType.VOICE_ASSISTANT_STT_END,
     ):
+        protocol._cancel_listening_watchdog()
         protocol._is_streaming_audio = False
         protocol._reachy_on_thinking()
         return
 
     if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_INTENT_PROGRESS:
         if data.get("tts_start_streaming") == "1":
+            protocol._cancel_listening_watchdog()
             protocol.play_tts()
         return
 
@@ -49,16 +52,19 @@ def handle_voice_event(
         return
 
     if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_START:
+        protocol._cancel_listening_watchdog()
         _LOGGER.debug("TTS_START event received, triggering speaking animation")
         protocol._reachy_on_speaking()
         return
 
     if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_TTS_END:
+        protocol._cancel_listening_watchdog()
         protocol._tts_url = data.get("url")
         protocol.play_tts()
         return
 
     if event_type == VoiceAssistantEventType.VOICE_ASSISTANT_RUN_END:
+        protocol._cancel_listening_watchdog()
         protocol._is_streaming_audio = False
         if not protocol._tts_played:
             protocol._pipeline_active = False
@@ -83,6 +89,7 @@ def handle_timer_event(
 
 
 def stop(protocol: "VoiceSatelliteProtocol") -> None:
+    protocol._cancel_listening_watchdog()
     protocol._pipeline_active = False
     protocol._is_streaming_audio = False
     protocol._continue_conversation = False
@@ -107,6 +114,7 @@ def stop(protocol: "VoiceSatelliteProtocol") -> None:
 def play_tts(protocol: "VoiceSatelliteProtocol") -> None:
     if (not protocol._tts_url) or protocol._tts_played:
         return
+    protocol._cancel_listening_watchdog()
     protocol._tts_played = True
     _LOGGER.debug("Playing TTS response: %s", protocol._tts_url)
     protocol.state.active_wake_words.add(protocol.state.stop_word.id)

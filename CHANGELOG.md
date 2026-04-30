@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.39] - 2026-04-30
+
+### Fixed
+- Add a 30s listening watchdog that aborts stuck Assist runs and returns Reachy motion to idle when Home Assistant stops sending voice pipeline events.
+- Force robot motion back to idle when Home Assistant disconnects during an active voice pipeline, preventing HA reloads from leaving the robot in the listening animation.
+
 ## [1.0.38] - 2026-04-27
 
 ### Changed

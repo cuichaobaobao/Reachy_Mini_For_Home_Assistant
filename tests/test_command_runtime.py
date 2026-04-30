@@ -158,6 +158,7 @@ class VoicePipelineStopTests(unittest.TestCase):
 
         protocol._set_stop_word_active = set_stop_word_active
         protocol._tts_finished = tts_finished
+        protocol._cancel_listening_watchdog = lambda: None
         protocol.unduck = lambda: None
         return protocol
 
