@@ -72,7 +72,7 @@ def handle_command(manager: MovementManager, cmd: str, payload: Any) -> None:
         manager.state.robot_state = payload
         manager.state.last_activity_time = manager._now()
 
-        if payload == RobotState.IDLE and not manager._idle_behavior_enabled():
+        if payload == RobotState.IDLE and not manager._idle_animation_enabled():
             animation_name = "none"
             manager._animation_player.stop()
         else:
@@ -94,7 +94,7 @@ def handle_command(manager: MovementManager, cmd: str, payload: Any) -> None:
             # low-energy rest pose so wakeup/listening can lift the head and
             # antennas again while still keeping the current yaw anchor. Use
             # the existing action interpolation so the antennas do not snap up.
-            if old_state == RobotState.IDLE and not manager._idle_behavior_enabled():
+            if old_state == RobotState.IDLE and not manager._idle_animation_enabled():
                 if manager._pending_action is not None and manager._pending_action.name != "idle_rest":
                     # A queued DOA/manual action already interpolates pitch and
                     # antennas to its target; do not overwrite it with wakeup.
@@ -122,6 +122,10 @@ def handle_command(manager: MovementManager, cmd: str, payload: Any) -> None:
 
     if cmd == "action":
         start_action(manager, payload)
+        return
+
+    if cmd == "temporary_idle_breathing":
+        manager._apply_temporary_idle_breathing_enabled(bool(payload))
         return
 
     if cmd == "nod":

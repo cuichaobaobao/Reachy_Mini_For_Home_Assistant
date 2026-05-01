@@ -25,7 +25,7 @@ class CommandRuntimeSourceTests(unittest.TestCase):
         self.assertIn("target_antenna_left=0.0", body)
         self.assertIn("target_antenna_right=0.0", body)
         self.assertIn("duration=0.7", body)
-        self.assertIn("old_state == RobotState.IDLE and not manager._idle_behavior_enabled()", body)
+        self.assertIn("old_state == RobotState.IDLE and not manager._idle_animation_enabled()", body)
         self.assertIn('manager._pending_action.name != "idle_rest"', body)
         self.assertIn('manager._pending_action.name == "idle_rest"', body)
         self.assertIn("manager._pending_action = None", body)
@@ -86,6 +86,10 @@ class MotionTimingSourceTests(unittest.TestCase):
         content = path.read_text(encoding="utf-8")
 
         self.assertIn("transition_to_idle_rest(duration=2.6)", content)
+        self.assertIn("start_temporary_idle_breathing()", content)
+        self.assertIn("stop_temporary_idle_breathing()", content)
+        self.assertIn("IDLE_RETURN_TO_NEUTRAL_DURATION_S = 1.0", content)
+        self.assertIn("IDLE_REST_HOLD_DELAY_S = 15.0", content)
 
     def test_conversation_finished_recenters_yaw_before_delayed_idle(self):
         session_flow = Path("reachy_mini_home_assistant/protocol/session_flow.py").read_text(encoding="utf-8")

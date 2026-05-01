@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 _No unreleased changes._
 
+## [1.0.41] - 2026-05-01
+
+### Changed
+- When idle behavior is disabled, resume the official idle breathing and antenna layer for 15s after conversation recentering before settling into the low-energy rest pose.
+- Keep the delayed rest return cancellable by a new wake/listen/think/speak state so follow-up wake words interrupt the temporary breathing window cleanly.
+
 ## [1.0.40] - 2026-04-30
 
 ### Changed

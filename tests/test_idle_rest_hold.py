@@ -45,6 +45,12 @@ class FakeMovementManager:
     def transition_to_idle_rest(self, duration=2.0):
         self.calls.append(("transition_to_idle_rest", duration))
 
+    def start_temporary_idle_breathing(self):
+        self.calls.append(("start_temporary_idle_breathing",))
+
+    def stop_temporary_idle_breathing(self):
+        self.calls.append(("stop_temporary_idle_breathing",))
+
 
 class IdleRestHoldTests(unittest.TestCase):
     def _make_motion(self, manager):
@@ -56,7 +62,7 @@ class IdleRestHoldTests(unittest.TestCase):
         motion._idle_rest_delay_generation = 0
         return motion
 
-    def test_idle_disabled_holds_neutral_before_entering_rest_pose(self):
+    def test_idle_disabled_breathes_before_entering_rest_pose(self):
         manager = FakeMovementManager(idle_enabled=False)
         motion = self._make_motion(manager)
 
@@ -64,12 +70,17 @@ class IdleRestHoldTests(unittest.TestCase):
             motion.on_idle()
             timer = motion._idle_rest_delay_timer
             self.assertIsNotNone(timer)
-            self.assertEqual(timer.delay, reachy_motion.IDLE_REST_HOLD_DELAY_S)
+            self.assertEqual(
+                timer.delay,
+                reachy_motion.IDLE_RETURN_TO_NEUTRAL_DURATION_S + reachy_motion.IDLE_REST_HOLD_DELAY_S,
+            )
             self.assertIn(("set_state", RobotState.IDLE), manager.calls)
             self.assertIn(("reset_to_neutral", 1.0), manager.calls)
+            self.assertIn(("start_temporary_idle_breathing",), manager.calls)
             self.assertNotIn(("transition_to_idle_rest", 2.6), manager.calls)
             timer.fire()
 
+        self.assertIn(("stop_temporary_idle_breathing",), manager.calls)
         self.assertIn(("transition_to_idle_rest", 2.6), manager.calls)
 
     def test_new_listening_state_cancels_pending_idle_rest(self):
@@ -85,6 +96,16 @@ class IdleRestHoldTests(unittest.TestCase):
         self.assertTrue(timer.cancelled)
         self.assertNotIn(("transition_to_idle_rest", 2.6), manager.calls)
         self.assertEqual(manager.calls[-1], ("set_state", RobotState.LISTENING))
+
+    def test_idle_enabled_stops_temporary_breathing(self):
+        manager = FakeMovementManager(idle_enabled=True)
+        motion = self._make_motion(manager)
+
+        motion.on_idle()
+
+        self.assertIn(("stop_temporary_idle_breathing",), manager.calls)
+        self.assertIn(("reset_to_neutral", 1.0), manager.calls)
+        self.assertNotIn(("start_temporary_idle_breathing",), manager.calls)
 
 
 if __name__ == "__main__":

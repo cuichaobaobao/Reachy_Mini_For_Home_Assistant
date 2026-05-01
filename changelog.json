@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.0.41",
+    "date": "2026-05-01",
+    "changes": [
+      "Build: Bump package version to 1.0.41",
+      "Change: Run the official idle breathing and antenna layer for 15 seconds after conversation recentering when idle behavior is disabled",
+      "Change: Cancel the delayed rest return cleanly when a new wake/listen/think/speak state starts during the temporary breathing window"
+    ]
+  },
+  {
     "version": "1.0.40",
     "date": "2026-04-30",
     "changes": [

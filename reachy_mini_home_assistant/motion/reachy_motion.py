@@ -10,7 +10,8 @@ import threading
 from .movement_manager import MovementManager, RobotState
 
 _LOGGER = logging.getLogger(__name__)
-IDLE_REST_HOLD_DELAY_S = 10.0
+IDLE_RETURN_TO_NEUTRAL_DURATION_S = 1.0
+IDLE_REST_HOLD_DELAY_S = 15.0
 
 
 class ReachyMiniMotion:
@@ -69,18 +70,21 @@ class ReachyMiniMotion:
     # Public non-blocking motion methods
     # -------------------------------------------------------------------------
 
-    def _cancel_delayed_idle_rest(self) -> None:
+    def _cancel_delayed_idle_rest(self, *, stop_temporary_breathing: bool = False) -> None:
         self._idle_rest_delay_generation += 1
         if self._idle_rest_delay_timer is not None:
             self._idle_rest_delay_timer.cancel()
             self._idle_rest_delay_timer = None
+        if stop_temporary_breathing and self._movement_manager is not None:
+            self._movement_manager.stop_temporary_idle_breathing()
 
     def _schedule_delayed_idle_rest(self) -> None:
         """Delay the low-energy rest pose after a conversation ends.
 
         When idle animation is disabled, the robot should not immediately drop
-        into the historical low-energy rest pose after speaking. Hold the
-        neutral awake pose briefly so quick follow-up wake words feel natural.
+        into the historical low-energy rest pose after speaking. Keep the
+        official breathing and antenna idle layer alive briefly so quick
+        follow-up wake words feel natural, then settle into rest.
         """
         self._cancel_delayed_idle_rest()
         self._idle_rest_delay_generation += 1
@@ -99,19 +103,21 @@ class ReachyMiniMotion:
                 return
             if manager._manual_head_yaw_hold:
                 return
+            manager.stop_temporary_idle_breathing()
             manager.transition_to_idle_rest(duration=2.6)
 
-        self._idle_rest_delay_timer = threading.Timer(IDLE_REST_HOLD_DELAY_S, _go_rest)
+        delay_s = IDLE_RETURN_TO_NEUTRAL_DURATION_S + IDLE_REST_HOLD_DELAY_S
+        self._idle_rest_delay_timer = threading.Timer(delay_s, _go_rest)
         self._idle_rest_delay_timer.daemon = True
         self._idle_rest_delay_timer.start()
-        _LOGGER.debug("Scheduled idle rest transition in %.1fs", IDLE_REST_HOLD_DELAY_S)
+        _LOGGER.debug("Scheduled idle rest transition in %.1fs", delay_s)
 
     def on_wakeup(self):
         """Called when wake word is detected.
 
         Non-blocking: command sent to MovementManager.
         """
-        self._cancel_delayed_idle_rest()
+        self._cancel_delayed_idle_rest(stop_temporary_breathing=True)
         _LOGGER.debug("on_wakeup called")
         if self._movement_manager is None:
             _LOGGER.warning("on_wakeup: movement_manager is None, skipping motion")
@@ -209,11 +215,12 @@ class ReachyMiniMotion:
         self._movement_manager.set_state(RobotState.IDLE)
         if not self._movement_manager._manual_head_yaw_hold:
             if self._movement_manager.get_idle_behavior_enabled():
-                self._cancel_delayed_idle_rest()
-                self._movement_manager.reset_to_neutral(duration=1.0)
+                self._cancel_delayed_idle_rest(stop_temporary_breathing=True)
+                self._movement_manager.reset_to_neutral(duration=IDLE_RETURN_TO_NEUTRAL_DURATION_S)
             else:
-                self._movement_manager.reset_to_neutral(duration=1.0)
+                self._movement_manager.reset_to_neutral(duration=IDLE_RETURN_TO_NEUTRAL_DURATION_S)
                 self._schedule_delayed_idle_rest()
+                self._movement_manager.start_temporary_idle_breathing()
 
         _LOGGER.debug("Reachy Mini: Idle pose")
 
@@ -226,7 +233,7 @@ class ReachyMiniMotion:
         if self._movement_manager is None:
             return
 
-        self._cancel_delayed_idle_rest()
+        self._cancel_delayed_idle_rest(stop_temporary_breathing=True)
         self._is_speaking = False
         self._movement_manager.reset_to_neutral(duration=0.6)
         self._movement_manager.set_state(RobotState.IDLE)

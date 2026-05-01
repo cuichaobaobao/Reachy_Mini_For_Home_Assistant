@@ -206,6 +206,9 @@ class MovementManager:
         self._idle_antenna_enabled = False
         # Idle generated motion toggle (pure movement, no audio)
         self._idle_generated_motion_enabled = False
+        # Temporary official breathing/antenna layer used after conversations
+        # when the user-facing idle behavior toggle is disabled.
+        self._temporary_idle_breathing_enabled = False
         self._idle_rest_head_pitch_rad = math.radians(float(DEFAULT_IDLE_REST_POSE["pitch_deg"]))
         self._idle_rest_antenna_left_rad = float(DEFAULT_IDLE_REST_POSE["antenna_left_rad"])
         self._idle_rest_antenna_right_rad = float(DEFAULT_IDLE_REST_POSE["antenna_right_rad"])
@@ -527,8 +530,32 @@ class MovementManager:
         """Whether any idle behavior subsystem is currently enabled."""
         return self._idle_motion_enabled or self._idle_antenna_enabled or self._idle_generated_motion_enabled
 
+    def _idle_animation_enabled(self) -> bool:
+        """Whether the idle animation layer should currently be sampled."""
+        return self._idle_behavior_enabled() or self._temporary_idle_breathing_enabled
+
+    def start_temporary_idle_breathing(self) -> None:
+        """Thread-safe: briefly run idle breathing even when idle behavior is disabled."""
+        self._enqueue_command("temporary_idle_breathing", True, "temporary_idle_breathing", timeout=0)
+
+    def stop_temporary_idle_breathing(self) -> None:
+        """Thread-safe: stop the temporary post-conversation breathing layer."""
+        self._enqueue_command("temporary_idle_breathing", False, "temporary_idle_breathing", timeout=0)
+
     def _apply_idle_behavior_enabled(self, enabled: bool) -> None:
         apply_idle_behavior_enabled(self, enabled)
+
+    def _apply_temporary_idle_breathing_enabled(self, enabled: bool) -> None:
+        self._temporary_idle_breathing_enabled = enabled
+        if enabled:
+            clear_idle_activity(self)
+            self._animation_player.set_animation("idle")
+            self._idle_action_animation_suppression = 0.0
+            self._antenna_controller.reset()
+        elif not self._idle_behavior_enabled():
+            clear_idle_activity(self)
+            clear_idle_animation(self)
+        logger.debug("Temporary idle breathing %s", "enabled" if enabled else "disabled")
 
     def _apply_idle_rest_pose(self) -> None:
         apply_idle_rest_pose(self)
@@ -816,7 +843,7 @@ class MovementManager:
                 self._idle_action_animation_suppression - fade_step,
             )
 
-        if self.state.robot_state == RobotState.IDLE and not self._idle_motion_enabled:
+        if self.state.robot_state == RobotState.IDLE and not self._idle_animation_enabled():
             self.state.anim_pitch = 0.0
             self.state.anim_yaw = 0.0
             self.state.anim_roll = 0.0
@@ -839,7 +866,11 @@ class MovementManager:
         self.state.anim_x = offsets["x"] * idle_animation_scale
         self.state.anim_y = offsets["y"] * idle_animation_scale
         self.state.anim_z = offsets["z"] * idle_animation_scale
-        if self.state.robot_state != RobotState.IDLE or self._idle_antenna_enabled:
+        if (
+            self.state.robot_state != RobotState.IDLE
+            or self._idle_antenna_enabled
+            or self._temporary_idle_breathing_enabled
+        ):
             self.state.anim_antenna_left = offsets["antenna_left"] * antenna_animation_scale
             self.state.anim_antenna_right = offsets["antenna_right"] * antenna_animation_scale
         else:
